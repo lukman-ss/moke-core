@@ -52,7 +52,7 @@ describe('Module - Providers', () => {
     class AsyncModule {}
 
     const app = await MokeFactory.createApplicationContext(AsyncModule);
-    const value = await app.resolveAsync(ASYNC_TOKEN);
+    const value = await app.getAsync(ASYNC_TOKEN);
     expect(value).to.equal('async-value');
   });
 });

@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { MokeFactory } from '@lukman-ss/moke-core';
-import { OnModuleDestroy, OnApplicationShutdown } from '@lukman-ss/moke-core';
+import { OnModuleDestroy, OnApplicationShutdown, Module } from '@lukman-ss/moke-core';
 import { Injectable } from '@lukman-ss/moke-core';
 
 describe('Application - Shutdown', () => {
@@ -49,7 +49,14 @@ describe('Application - Shutdown', () => {
       onApplicationShutdown() { throw new Error('Error 2'); }
     }
 
-    const app = await MokeFactory.createApplicationContext({ providers: [Service1, Service2] } as any);
+    @Module({ providers: [Service1, Service2] })
+    class AppModule {}
+    const app = await MokeFactory.createApplicationContext(AppModule);
+    
+    // Resolve services to instantiate them so they receive lifecycle hooks
+    app.get(Service1);
+    app.get(Service2);
+    
     await app.init();
 
     try {
@@ -57,7 +64,7 @@ describe('Application - Shutdown', () => {
       expect.fail();
     } catch (e: any) {
       expect(e.name).to.equal('MokeShutdownError');
-      expect(e.errors).to.have.length(2);
+      expect(e.errors).to.have.lengthOf(2);
     }
 
     expect(app.state).to.equal('closed');

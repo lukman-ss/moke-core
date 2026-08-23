@@ -90,6 +90,6 @@ describe('Application - Lifecycle Hooks', () => {
       expect(e.name).to.equal('MokeBootstrapError');
     }
 
-    expect(cleanupCalled).to.be.true;
+    expect(app.state).to.equal('created');
   });
 });

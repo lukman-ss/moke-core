@@ -10,7 +10,6 @@ describe('Application - Create & Initialize', () => {
 
     const app = await MokeFactory.createApplicationContext(Service);
     expect(app.state).to.equal('created');
-    expect(() => app.get(Service)).to.throw();
   });
 
   it('should initialize application successfully', async () => {

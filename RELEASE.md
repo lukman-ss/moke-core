@@ -1,129 +1,28 @@
-# Release Process
+# Release Notes
 
-This document describes the exact release process for moke-core.
+## v0.2.0
 
-## Prerequisites
+This release marks a significant milestone for Moke Core. The architecture has been refined and audited to ensure it is robust enough to serve as the foundation for the upcoming `moke-http` package.
 
-- Ensure all changes are merged to `main` branch
-- Ensure CI passes on `main`
-- Ensure `npm pack --dry-run` succeeds
+### 💥 Breaking Changes
 
-## Release Steps
+- **Removed `MokeFactory.create()` and `MokeFactory.createAsync()`**: These methods bypassed the module traversal and lifecycle hooks. Use `MokeFactory.createApplicationContext()` instead.
+- **Removed `MokeApplicationContext.resolve()` and `resolveAsync()`**: These aliases have been removed to clarify the API. Use `get()` and `getAsync()` instead.
+- **Removed `MokeLogger`**: The class has been renamed to `ConsoleLogger` to clearly indicate its implementation.
+- **Removed Default `init()` Execution**: `MokeFactory.createApplicationContext()` no longer calls `init()` automatically. You must call `await app.init()` manually. This allows you to register `ServiceProviders` or test overrides before initialization.
 
-Execute the following steps manually or via script:
+### ✨ Features
 
-### 1. Checkout main
-```bash
-git checkout main
-```
+- **Test Overrides**: Added `container.override(Token, Provider)` API to safely swap implementations during integration testing.
+- **`moke-http` Readiness**: Core semantics have been thoroughly audited and proven against simulated HTTP dependency graphs (Singleton `HttpServer`, Scoped `RequestContext`, `Controller`).
+- **Child Container Improvements**: Fixed a bug where child containers could accidentally mutate the parent container's registrations when overriding.
 
-### 2. Pull latest
-```bash
-git pull origin main
-```
+### 🐛 Bug Fixes
 
-### 3. Run quality gate
-```bash
-npm ci
-npm run typecheck
-npm test
-```
+- Fixed `override()` allowing modifications on a frozen container. It now correctly throws if `app.init()` has already completed.
+- Fixed async lifecycle hooks occasionally causing race conditions during simultaneous `app.init()` calls.
 
-### 4. Bump version
-```bash
-npm version patch  # or minor or major
-```
+### 🏗️ Architecture
 
-### 5. Commit version bump
-```bash
-git add package.json package-lock.json
-git commit -m "chore: bump version to v0.1.x"
-```
-
-### 6. Create tag
-```bash
-git tag v0.1.x
-```
-
-### 7. Push
-```bash
-git push origin main
-git push origin v0.1.x
-```
-
-### 8. Create GitHub Release
-- Go to https://github.com/lukman-ss/moke-core/releases/new
-- Select the tag `v0.1.x`
-- Add release notes
-- Publish release
-
-### 9. Verify npm
-```bash
-npm pack --dry-run
-```
-
-Verify package contents are correct (see Package Tarball Audit below).
-
-## Using the Release Script
-
-```bash
-./scripts/release.sh patch
-```
-
-This script will perform all steps automatically except creating the GitHub release.
-
-## Quality Gates
-
-Every release must pass:
-
-1. TypeScript compilation (`npm run typecheck`)
-2. All tests (`npm test`)
-3. Build succeeds (`npm run build`)
-4. Package validation (`npm pack --dry-run`)
-
-## Package Tarball Audit
-
-### Required Files
-
-- `dist/` - Compiled TypeScript output
-- `README.md` - Documentation
-- `LICENSE` - MIT license file
-- `package.json` - Package metadata
-
-### Excluded Files
-
-The following are intentionally excluded from the package:
-
-- `test/` - Test files
-- `examples/` - Example files
-- `benchmarks/` - Benchmark scripts
-- `src/` - Source TypeScript files
-- `tsconfig*.json` - TypeScript configuration
-- `.github/` - GitHub workflows
-- `*.test.ts` - Test files
-- `*.bench.ts` - Benchmark files
-
-Verify with:
-```bash
-npm pack --dry-run
-```
-
-## Version Strategy
-
-- **patch**: Bug fixes, non-breaking changes
-- **minor**: New features, non-breaking
-- **major**: Breaking changes
-
-Follow [semantic versioning](https://semver.org/).
-
-## Troubleshooting
-
-### Tag version mismatch
-If the tag version doesn't match package.json version:
-1. Delete the tag: `git tag -d v0.1.x && git push origin :refs/tags/v0.1.x`
-2. Recreate tag after fixing package.json
-
-### Tests failing after version bump
-- Check for TypeScript compilation errors
-- Ensure no import side-effects
-- Verify metadata symbol usage
+- Added `ARCHITECTURE.md` to document the internal ownership, lifecycle, module graph, and provider scopes.
+- Added `STABILITY.md` to explicitly state the public API stability matrix during the `0.x` phase.

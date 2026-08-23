@@ -1,7 +1,7 @@
 import { expect } from 'chai';
-import { Container } from '../src/container.js';
-import { createToken } from '../src/types.js';
-import { Injectable } from '../src/decorators.js';
+import { Container } from '../../src/container.js';
+import { createToken } from '../../src/types.js';
+import { Injectable, Inject } from '../../src/decorators.js';
 
 describe('Container - Binding', () => {
   let container: Container;

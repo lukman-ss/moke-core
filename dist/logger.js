@@ -20,7 +20,4 @@ export class ConsoleLogger {
         return `[Moke] ${level} ${ctx ? `[${ctx}] ` : ''}${message}`;
     }
 }
-/** @deprecated Use ConsoleLogger instead */
-export class MokeLogger extends ConsoleLogger {
-}
 //# sourceMappingURL=logger.js.map

@@ -1,6 +1,7 @@
 import { expect } from 'chai';
-import { Container, createToken, Inject } from '../../src/container.js';
-import { Injectable } from '../../src/decorators.js';
+import { Container } from '../../src/container.js';
+import { Injectable, Inject } from '../../src/decorators.js';
+import { createToken } from '../../src/types.js';
 
 describe('Container - Async', () => {
   let container: Container;

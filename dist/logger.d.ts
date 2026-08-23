@@ -13,7 +13,4 @@ export declare class ConsoleLogger implements Logger {
     error(message: string, trace?: string, context?: string): void;
     private format;
 }
-/** @deprecated Use ConsoleLogger instead */
-export declare class MokeLogger extends ConsoleLogger {
-}
 //# sourceMappingURL=logger.d.ts.map

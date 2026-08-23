@@ -30,5 +30,4 @@ export class ConsoleLogger implements Logger {
   }
 }
 
-/** @deprecated Use ConsoleLogger instead */
-export class MokeLogger extends ConsoleLogger {}
+

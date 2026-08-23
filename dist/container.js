@@ -43,6 +43,9 @@ export class Container {
         this.internalBind(token, providerDef, scope, true);
     }
     internalBind(token, providerDef, scope, isOverride) {
+        if (this.isFrozen) {
+            throw new Error('Cannot register providers on a frozen container. Container is already initialized.');
+        }
         const key = this.getTokenKey(token);
         if (!isOverride && this.hasOwn(token)) {
             throw new DuplicateProviderError(key);

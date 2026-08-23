@@ -1,6 +1,7 @@
 import { expect } from 'chai';
-import { Container, createToken } from '../../src/container.js';
+import { Container } from '../../src/container.js';
 import { DependencyResolutionError } from '../../src/errors.js';
+import { createToken } from '../../src/types.js';
 
 describe('Container - Child Container', () => {
   let root: Container;

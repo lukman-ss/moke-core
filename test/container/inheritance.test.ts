@@ -28,7 +28,7 @@ describe('Decorator Inheritance', () => {
     expect(child.dep).to.be.instanceOf(Dependency);
   });
 
-  it('should allow child to extend base without @Injectable', () => {
+  it('should allow child to extend base without @Injectable (but explicit @Inject required for child)', () => {
     class Dependency {}
 
     class BaseService {
@@ -36,7 +36,11 @@ describe('Decorator Inheritance', () => {
     }
 
     @Injectable()
-    class ChildService extends BaseService {}
+    class ChildService extends BaseService {
+      constructor(@Inject(Dependency) dep: Dependency) {
+        super(dep);
+      }
+    }
 
     container.singleton(Dependency);
     container.singleton(ChildService);

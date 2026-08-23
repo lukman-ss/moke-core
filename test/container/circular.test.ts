@@ -1,5 +1,6 @@
 import { expect } from 'chai';
-import { Container, createToken } from '../../src/container.js';
+import { Container } from '../../src/container.js';
+import { createToken } from '../../src/types.js';
 import { Injectable } from '../../src/decorators.js';
 import { DependencyResolutionError } from '../../src/errors.js';
 
@@ -28,10 +29,10 @@ describe('Container - Circular Dependencies', () => {
     container.singleton(B);
     
     // Manually create circular dependency
-    (container as any).registrations.get(container.getTokenKey(A)).provider = { 
+    (container as any).registrations.get(A).provider = { 
       useFactory: (c: Container) => { c.resolve(B); return new A(); }
     };
-    (container as any).registrations.get(container.getTokenKey(B)).provider = { 
+    (container as any).registrations.get(B).provider = { 
       useFactory: (c: Container) => { c.resolve(A); return new B(); }
     };
 

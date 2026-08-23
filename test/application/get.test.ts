@@ -1,12 +1,15 @@
 import { expect } from 'chai';
-import { MokeFactory, createToken } from '@lukman-ss/moke-core';
+import { MokeFactory, createToken, Module } from '@lukman-ss/moke-core';
 import { Injectable } from '@lukman-ss/moke-core';
 
 describe('Application - Get & GetAsync', () => {
   it('should resolve dependency via get()', async () => {
     class Service {}
     
-    const app = await MokeFactory.createApplicationContext({ providers: [Service] } as any);
+    @Module({ providers: [Service] })
+    class AppModule {}
+    
+    const app = await MokeFactory.createApplicationContext(AppModule);
     
     const service = app.get(Service);
     expect(service).to.be.instanceOf(Service);
@@ -15,7 +18,7 @@ describe('Application - Get & GetAsync', () => {
   it('should resolve async dependency via getAsync()', async () => {
     const TOKEN = createToken('ASYNC_SERVICE');
     
-    const app = await MokeFactory.createApplicationContext({
+    @Module({
       providers: [{
         provide: TOKEN,
         useFactory: async () => {
@@ -23,21 +26,13 @@ describe('Application - Get & GetAsync', () => {
           return 'async-value';
         }
       }]
-    } as any);
-    
-    await app.init();
-    
-    const value = await app.resolveAsync(TOKEN);
-    expect(value).to.equal('async-value');
-  });
+    })
+    class AppModule {}
 
-  it('should resolve dependency via resolve() alias', async () => {
-    class Service {}
-    
-    const app = await MokeFactory.createApplicationContext({ providers: [Service] } as any);
+    const app = await MokeFactory.createApplicationContext(AppModule);
     await app.init();
     
-    const service = app.resolve(Service);
-    expect(service).to.be.instanceOf(Service);
+    const value = await app.getAsync(TOKEN);
+    expect(value).to.equal('async-value');
   });
 });

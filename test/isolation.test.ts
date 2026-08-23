@@ -55,13 +55,15 @@ describe('Multi Application Isolation', () => {
     let destroyedA = false;
     let destroyedB = false;
 
+    class Resource {
+      constructor(public name: string, private onDestroy: () => void) {}
+      onModuleDestroy() { this.onDestroy(); }
+    }
+
     @Module({
       providers: [{
         provide: TOKEN,
-        useValue: { 
-          destroy() { destroyedA = true; },
-          name: 'AppA'
-        }
+        useFactory: () => new Resource('AppA', () => { destroyedA = true; })
       }]
     })
     class AppModuleA {}
@@ -69,10 +71,7 @@ describe('Multi Application Isolation', () => {
     @Module({
       providers: [{
         provide: TOKEN,
-        useValue: { 
-          destroy() { destroyedB = true; },
-          name: 'AppB'
-        }
+        useFactory: () => new Resource('AppB', () => { destroyedB = true; })
       }]
     })
     class AppModuleB {}
@@ -80,10 +79,15 @@ describe('Multi Application Isolation', () => {
     const appA = await MokeFactory.createApplicationContext(AppModuleA);
     const appB = await MokeFactory.createApplicationContext(AppModuleB);
 
+    // Resolve to instantiate
+    const tokenA = appA.get(TOKEN);
+    const tokenB = appB.get(TOKEN);
+    expect((tokenA as any).name).to.equal('AppA');
+    expect((tokenB as any).name).to.equal('AppB');
+
     await appA.close();
     expect(destroyedA).to.be.true;
     
-    const tokenB = appB.get(TOKEN);
     expect((tokenB as any).name).to.equal('AppB');
     expect(destroyedB).to.be.false;
   });
@@ -92,13 +96,17 @@ describe('Multi Application Isolation', () => {
     class RequestState {}
     const STATE_TOKEN = createToken<RequestState>('REQUEST_STATE');
 
-    const appA = await MokeFactory.createApplicationContext({
-      providers: [{ provide: STATE_TOKEN, useClass: RequestState, scope: 'scoped' }]
-    } as any);
+    @Module({
+      providers: [{ provide: STATE_TOKEN, useClass: RequestState, scope: 'scoped' as any }]
+    })
+    class AppA {}
+    const appA = await MokeFactory.createApplicationContext(AppA);
 
-    const appB = await MokeFactory.createApplicationContext({
-      providers: [{ provide: STATE_TOKEN, useClass: RequestState, scope: 'scoped' }]
-    } as any);
+    @Module({
+      providers: [{ provide: STATE_TOKEN, useClass: RequestState, scope: 'scoped' as any }]
+    })
+    class AppB {}
+    const appB = await MokeFactory.createApplicationContext(AppB);
 
     const childA = appA.container.createChild();
     const childB = appB.container.createChild();

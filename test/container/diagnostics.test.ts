@@ -1,5 +1,6 @@
 import { expect } from 'chai';
-import { Container, createToken } from '../../src/container.js';
+import { Container } from '../../src/container.js';
+import { createToken } from '../../src/types.js';
 import { InvalidProviderError, DuplicateProviderError } from '../../src/errors.js';
 
 describe('Container - Diagnostics', () => {
@@ -48,11 +49,12 @@ describe('Container - Diagnostics', () => {
 
   it('should hasOwn() distinguish parent vs child registrations', () => {
     class Service {}
-    root.singleton(Service);
-    const child = root.createChild();
-    child.singleton(Service);
+    container.singleton(Service);
+    const child = container.createChild();
+    class ServiceB {}
+    child.singleton(ServiceB);
 
-    expect(child.hasOwn(Service)).to.be.true;
-    expect(root.hasOwn(Service)).to.be.true;
+    expect(child.hasOwn(ServiceB)).to.be.true;
+    expect(container.hasOwn(ServiceB)).to.be.false;
   });
 });

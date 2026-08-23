@@ -55,11 +55,15 @@ export class Container {
     this.internalBind(token, providerDef, scope, false);
   }
 
-  override<T>(token: Token<T>, providerDef: ProviderDefinition<T>, scope: Scope = 'singleton'): void {
+   override<T>(token: Token<T>, providerDef: ProviderDefinition<T>, scope: Scope = 'singleton'): void {
     this.internalBind(token, providerDef, scope, true);
   }
 
   private internalBind<T>(token: Token<T>, providerDef: ProviderDefinition<T>, scope: Scope, isOverride: boolean): void {
+    if (this.isFrozen) {
+      throw new Error('Cannot register providers on a frozen container. Container is already initialized.');
+    }
+
     const key = this.getTokenKey(token);
 
     if (!isOverride && this.hasOwn(token)) {

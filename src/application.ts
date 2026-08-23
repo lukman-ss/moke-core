@@ -1,5 +1,5 @@
 import { Container } from './container.js';
-import { ConsoleLogger, Logger, MokeLogger } from './logger.js';
+import { ConsoleLogger, Logger } from './logger.js';
 import { Constructor, Token } from './types.js';
 import { ServiceProvider } from './service-provider.js';
 import { ProviderDefinition, Scope, Provider } from './providers.js';
@@ -24,18 +24,8 @@ export class MokeApplicationContext {
     return this.container.resolve(token);
   }
 
-  /** @deprecated Use get() instead */
-  resolve<T>(token: Token<T>): T {
-    return this.get(token);
-  }
-
   getAsync<T>(token: Token<T>): Promise<T> {
     return this.container.resolveAsync(token);
-  }
-
-  /** @deprecated Use getAsync() instead */
-  async resolveAsync<T>(token: Token<T>): Promise<T> {
-    return this.getAsync(token);
   }
 
   register<T>(token: Token<T>, providerDef: ProviderDefinition<T>, scope: Scope = 'singleton'): void {
@@ -170,26 +160,6 @@ export class MokeApplicationContext {
 
 export class MokeFactory {
   /**
-   * @deprecated Use `createApplicationContext` instead. This method skips proper module traversal and lifecycle hooks.
-   */
-  static create<T>(module: Constructor<T>): T {
-    const container = new Container();
-    container.instance(MokeLogger, new MokeLogger());
-    container.bind('Logger', { useExisting: MokeLogger });
-    return container.resolve(module);
-  }
-
-  /**
-   * @deprecated Use `createApplicationContext` instead. This method skips proper module traversal and lifecycle hooks.
-   */
-  static async createAsync<T>(module: Constructor<T>): Promise<T> {
-    const container = new Container();
-    container.instance(MokeLogger, new MokeLogger());
-    container.bind('Logger', { useExisting: MokeLogger });
-    return container.resolveAsync(module);
-  }
-
-  /**
    * Creates a MokeApplicationContext, compiling the module tree.
    * Does not automatically call `init()`.
    */
@@ -197,8 +167,8 @@ export class MokeFactory {
     const container = new Container();
     
     // Core default registrations
-    container.instance(MokeLogger, new MokeLogger());
-    container.bind('Logger', { useExisting: MokeLogger });
+    container.instance(ConsoleLogger, new ConsoleLogger());
+    container.bind('Logger', { useExisting: ConsoleLogger });
     
     await this.compileModuleAsync(module, container, new Set(), []);
     await container.resolveAsync(module); // Resolve the root module to trigger graph instantiation

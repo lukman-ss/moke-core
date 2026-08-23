@@ -17,10 +17,10 @@ describe('ServiceProvider', () => {
         this.app.container.singleton(FakeHttpServer);
       }
       async boot() {
-        await this.app.resolveAsync(FakeHttpServer).then(server => server.start());
+        await this.app.getAsync(FakeHttpServer).then(server => server.start());
       }
       async shutdown() {
-        await this.app.resolveAsync(FakeHttpServer).then(server => server.stop());
+        await this.app.getAsync(FakeHttpServer).then(server => server.stop());
       }
     }
 

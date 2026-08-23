@@ -96,6 +96,7 @@ describe('Module - Imports', () => {
     class RootModule {}
 
     const app = await MokeFactory.createApplicationContext(RootModule);
+    app.get(SharedService); // trigger instantiation
     expect(instanceCount).to.equal(1);
   });
 
@@ -117,7 +118,9 @@ describe('Module - Imports', () => {
     })
     class Module2 {}
 
-    const app = await MokeFactory.createApplicationContext({ imports: [Module1, Module2] } as any);
+    @Module({ imports: [Module1, Module2] })
+    class RootModule {}
+    const app = await MokeFactory.createApplicationContext(RootModule);
     expect(app.get(SHARED_TOKEN)).to.equal('shared');
   });
 });
