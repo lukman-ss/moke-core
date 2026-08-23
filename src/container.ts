@@ -44,6 +44,14 @@ export class Container {
       throw new DuplicateProviderError(key);
     }
 
+    if (isOverride && this.registrations.has(key)) {
+      const existing = this.registrations.get(key)!;
+      // Clean up old instances/promises to allow immediate substitution
+      if (existing.instance && typeof existing.instance === 'object') {
+        this.instantiatedInstances.delete(existing.instance);
+      }
+    }
+
     let provider: Provider<T>;
 
     if (typeof providerDef === 'function') {
@@ -64,6 +72,7 @@ export class Container {
       scope = 'transient'; 
     }
 
+    // Always create a fresh registration entry without instance or asyncPromise attached
     this.registrations.set(key, { provider, scope });
   }
 
