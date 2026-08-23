@@ -1,16 +1,40 @@
 {
   "name": "@lukman-ss/moke-core",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "version": "0.1.0",
+  "description": "Core module for Moke web framework. Provides IoC Container, Dependency Injection, and Application Bootstrap.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
-    "build": "tsc"
+    "build": "npm run clean && tsc",
+    "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
+    "test": "cross-env TS_NODE_PROJECT=tsconfig.test.json mocha --loader=ts-node/esm \"test/**/*.test.ts\"",
+    "test:watch": "cross-env TS_NODE_PROJECT=tsconfig.test.json mocha --loader=ts-node/esm --watch \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "reflect-metadata": "^0.1.13"
   },
   "devDependencies": {
+    "@types/chai": "^5.2.3",
+    "@types/mocha": "^10.0.10",
+    "chai": "^6.2.2",
+    "cross-env": "^10.1.0",
+    "mocha": "^11.8.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.2.2"
-  },
-  "description": "Core module for Moke web framework. Provides IoC Container, Dependency Injection, and Application Bootstrap."
+  }
 }

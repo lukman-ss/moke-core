@@ -1,12 +1,13 @@
-import { Container } from './container';
-import { MokeLogger } from './logger';
+import { Container } from './container.js';
+import { MokeLogger } from './logger.js';
+import { Constructor } from './types.js';
 
 export class MokeFactory {
-  static create(module: any) {
+  static create<T>(module: Constructor<T>): T {
     const container = new Container();
     
     // Default providers
-    container.register(MokeLogger, new MokeLogger());
+    container.instance(MokeLogger, new MokeLogger());
     
     const app = container.resolve(module);
     return app;

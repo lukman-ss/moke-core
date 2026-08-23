@@ -1,8 +1,17 @@
 import 'reflect-metadata';
-type Constructor<T = any> = new (...args: any[]) => T;
+import { Token } from './types.js';
+import { ProviderDefinition, Scope } from './providers.js';
 export declare class Container {
-    private providers;
-    register(token: any, instance: any): void;
-    resolve<T>(target: Constructor<T>): T;
+    private registrations;
+    bind<T>(token: Token<T>, providerDef: ProviderDefinition<T>, scope?: Scope): void;
+    singleton<T>(token: Token<T>, providerDef?: ProviderDefinition<T>): void;
+    transient<T>(token: Token<T>, providerDef?: ProviderDefinition<T>): void;
+    instance<T>(token: Token<T>, value: T): void;
+    factory<T>(token: Token<T>, factory: (container: Container) => T | Promise<T>, scope?: Scope): void;
+    has<T>(token: Token<T>): boolean;
+    resolve<T>(token: Token<T>): T;
+    private resolveProvider;
+    private instantiateClass;
+    private getTokenKey;
 }
-export {};
+//# sourceMappingURL=container.d.ts.map

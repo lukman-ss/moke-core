@@ -1,7 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.MokeLogger = void 0;
-class MokeLogger {
+export class MokeLogger {
     log(message) {
         console.log(`[Moke] ${message}`);
     }
@@ -9,4 +6,4 @@ class MokeLogger {
         console.error(`[Moke ERROR] ${message}`, trace || '');
     }
 }
-exports.MokeLogger = MokeLogger;
+//# sourceMappingURL=logger.js.map

@@ -1,15 +1,12 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.MokeFactory = void 0;
-const container_1 = require("./container");
-const logger_1 = require("./logger");
-class MokeFactory {
+import { Container } from './container.js';
+import { MokeLogger } from './logger.js';
+export class MokeFactory {
     static create(module) {
-        const container = new container_1.Container();
+        const container = new Container();
         // Default providers
-        container.register(logger_1.MokeLogger, new logger_1.MokeLogger());
+        container.instance(MokeLogger, new MokeLogger());
         const app = container.resolve(module);
         return app;
     }
 }
-exports.MokeFactory = MokeFactory;
+//# sourceMappingURL=application.js.map

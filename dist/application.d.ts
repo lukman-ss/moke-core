@@ -1,3 +1,5 @@
+import { Constructor } from './types.js';
 export declare class MokeFactory {
-    static create(module: any): unknown;
+    static create<T>(module: Constructor<T>): T;
 }
+//# sourceMappingURL=application.d.ts.map
