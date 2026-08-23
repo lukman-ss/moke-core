@@ -52,7 +52,7 @@ describe('ApplicationContext & Lifecycle', () => {
       await app.init();
       expect.fail();
     } catch (e: any) {
-      expect(e.message).to.equal('fail');
+      expect(e.message).to.include('Bootstrap failed during onModuleInit');
       expect(app.state).to.equal('created');
     }
   });
@@ -92,7 +92,7 @@ describe('ApplicationContext & Lifecycle', () => {
     expect(order).to.deep.equal(['init', 'bootstrap', 'shutdown', 'destroy']);
   });
 
-  it('swallows shutdown errors idempotently', async () => {
+  it('aggregates shutdown errors and throws MokeShutdownError', async () => {
     let destroyCalls = 0;
 
     @Injectable()
@@ -104,8 +104,13 @@ describe('ApplicationContext & Lifecycle', () => {
     }
 
     const app = await MokeFactory.createApplicationContext(Service);
-    await app.close();
-    await app.close(); // idempotent
+    
+    try {
+      await app.close();
+      expect.fail();
+    } catch (e: any) {
+      expect(e.name).to.equal('MokeShutdownError');
+    }
     
     expect(destroyCalls).to.equal(1);
     expect(app.state).to.equal('closed');

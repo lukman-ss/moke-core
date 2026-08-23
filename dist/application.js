@@ -1,7 +1,7 @@
 import { Container } from './container.js';
 import { MokeLogger } from './logger.js';
 import { ReflectionHost } from './reflection.js';
-import { MokeCircularModuleError } from './errors.js';
+import { MokeCircularModuleError, MokeBootstrapError, MokeShutdownError } from './errors.js';
 export class MokeApplicationContext {
     container;
     _state = 'created';
@@ -49,13 +49,23 @@ export class MokeApplicationContext {
         // 1. onModuleInit
         for (const instance of instances) {
             if (typeof instance.onModuleInit === 'function') {
-                await instance.onModuleInit();
+                try {
+                    await instance.onModuleInit();
+                }
+                catch (e) {
+                    throw new MokeBootstrapError('onModuleInit', e, instance.constructor?.name);
+                }
             }
         }
         // 2. onApplicationBootstrap
         for (const instance of instances) {
             if (typeof instance.onApplicationBootstrap === 'function') {
-                await instance.onApplicationBootstrap();
+                try {
+                    await instance.onApplicationBootstrap();
+                }
+                catch (e) {
+                    throw new MokeBootstrapError('onApplicationBootstrap', e, instance.constructor?.name);
+                }
             }
         }
     }
@@ -63,6 +73,7 @@ export class MokeApplicationContext {
         if (this._state === 'closed')
             return;
         this._state = 'closing';
+        const shutdownErrors = [];
         // Reverse order for teardown
         const instances = this.container.getInstantiatedInstances().reverse();
         // 1. onApplicationShutdown
@@ -72,7 +83,7 @@ export class MokeApplicationContext {
                     await instance.onApplicationShutdown(signal);
                 }
                 catch (e) {
-                    // Swallow shutdown errors
+                    shutdownErrors.push(e);
                 }
             }
         }
@@ -83,12 +94,15 @@ export class MokeApplicationContext {
                     await instance.onModuleDestroy();
                 }
                 catch (e) {
-                    // Swallow destroy errors
+                    shutdownErrors.push(e);
                 }
             }
         }
         this.container.dispose();
         this._state = 'closed';
+        if (shutdownErrors.length > 0) {
+            throw new MokeShutdownError(shutdownErrors);
+        }
     }
 }
 export class MokeFactory {

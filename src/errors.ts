@@ -73,3 +73,18 @@ export class DependencyResolutionError extends MokeError {
     this.cause = cause;
   }
 }
+
+export class MokeBootstrapError extends MokeError {
+  constructor(public readonly hook: string, cause: Error, public readonly instanceName?: string) {
+    super(`Bootstrap failed during ${hook}${instanceName ? ` for ${instanceName}` : ''}: ${cause.message}`, 'MOKE_APP_BOOTSTRAP_ERROR');
+    this.name = 'MokeBootstrapError';
+    this.cause = cause;
+  }
+}
+
+export class MokeShutdownError extends MokeError {
+  constructor(public readonly errors: Error[]) {
+    super(`Application shutdown completed with ${errors.length} error(s).`, 'MOKE_APP_SHUTDOWN_ERROR');
+    this.name = 'MokeShutdownError';
+  }
+}

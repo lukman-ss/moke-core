@@ -4,7 +4,7 @@ import { Constructor, Token } from './types.js';
 import { Provider } from './providers.js';
 import { ReflectionHost } from './reflection.js';
 
-import { MokeCircularModuleError } from './errors.js';
+import { MokeCircularModuleError, MokeBootstrapError, MokeShutdownError } from './errors.js';
 
 export type ApplicationState = 'created' | 'initializing' | 'ready' | 'closing' | 'closed';
 
@@ -60,14 +60,22 @@ export class MokeApplicationContext {
     // 1. onModuleInit
     for (const instance of instances as any[]) {
       if (typeof instance.onModuleInit === 'function') {
-        await instance.onModuleInit();
+        try {
+          await instance.onModuleInit();
+        } catch (e: any) {
+          throw new MokeBootstrapError('onModuleInit', e, instance.constructor?.name);
+        }
       }
     }
 
     // 2. onApplicationBootstrap
     for (const instance of instances as any[]) {
       if (typeof instance.onApplicationBootstrap === 'function') {
-        await instance.onApplicationBootstrap();
+        try {
+          await instance.onApplicationBootstrap();
+        } catch (e: any) {
+          throw new MokeBootstrapError('onApplicationBootstrap', e, instance.constructor?.name);
+        }
       }
     }
   }
@@ -75,6 +83,8 @@ export class MokeApplicationContext {
   async close(signal?: string): Promise<void> {
     if (this._state === 'closed') return;
     this._state = 'closing';
+
+    const shutdownErrors: Error[] = [];
 
     // Reverse order for teardown
     const instances = this.container.getInstantiatedInstances().reverse();
@@ -84,8 +94,8 @@ export class MokeApplicationContext {
       if (typeof instance.onApplicationShutdown === 'function') {
         try {
           await instance.onApplicationShutdown(signal);
-        } catch (e) {
-          // Swallow shutdown errors
+        } catch (e: any) {
+          shutdownErrors.push(e);
         }
       }
     }
@@ -95,14 +105,18 @@ export class MokeApplicationContext {
       if (typeof instance.onModuleDestroy === 'function') {
         try {
           await instance.onModuleDestroy();
-        } catch (e) {
-          // Swallow destroy errors
+        } catch (e: any) {
+          shutdownErrors.push(e);
         }
       }
     }
 
     this.container.dispose();
     this._state = 'closed';
+
+    if (shutdownErrors.length > 0) {
+      throw new MokeShutdownError(shutdownErrors);
+    }
   }
 }
 
