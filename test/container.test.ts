@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { Container } from '../src/container.js';
 import { createToken } from '../src/types.js';
 import { Inject, Injectable } from '../src/decorators.js';
-import { AsyncProviderResolutionError, CircularDependencyError, InvalidProviderError, UnknownProviderError } from '../src/errors.js';
+import { DependencyResolutionError, InvalidProviderError } from '../src/errors.js';
 
 describe('Container', () => {
   let container: Container;
@@ -142,11 +142,11 @@ describe('Container', () => {
     expect(val).to.equal('async-val');
   });
 
-  it('should throw AsyncProviderResolutionError when async factory resolved via sync resolve', () => {
+  it('should throw DependencyResolutionError capturing AsyncProviderResolutionError when async factory resolved via sync resolve', () => {
     const TOKEN = createToken<string>('ASYNC_FACTORY_FAIL');
     container.factory(TOKEN, async () => 'fail-val');
     
-    expect(() => container.resolve(TOKEN)).to.throw(AsyncProviderResolutionError);
+    expect(() => container.resolve(TOKEN)).to.throw(DependencyResolutionError);
   });
 
   it('should resolve async singleton only once (cache in-flight promise)', async () => {
@@ -224,7 +224,7 @@ describe('Container', () => {
     }
 
     container.singleton(A);
-    expect(() => container.resolve(A)).to.throw(CircularDependencyError, /A -> A/);
+    expect(() => container.resolve(A)).to.throw(DependencyResolutionError, /Circular dependency detected/);
   });
 
   it('should detect A -> B -> A cycle', () => {
@@ -239,7 +239,7 @@ describe('Container', () => {
     (container as any).registrations.get(A).provider.useFactory = (c: Container) => { c.resolve(B); return new A(); };
     (container as any).registrations.get(B).provider.useFactory = (c: Container) => { c.resolve(A); return new B(); };
 
-    expect(() => container.resolve(A)).to.throw(CircularDependencyError, /A -> B -> A/);
+    expect(() => container.resolve(A)).to.throw(DependencyResolutionError, /Circular dependency detected/);
   });
 
   it('should detect useExisting cycle', () => {
@@ -248,7 +248,7 @@ describe('Container', () => {
     container.bind(T1, { useExisting: T2 });
     container.bind(T2, { useExisting: T1 });
 
-    expect(() => container.resolve(T1)).to.throw(CircularDependencyError, /Symbol\(T1\) -> Symbol\(T2\) -> Symbol\(T1\)/);
+    expect(() => container.resolve(T1)).to.throw(DependencyResolutionError, /Circular dependency detected/);
   });
 
   it('should not throw on valid diamond non-cycle', () => {

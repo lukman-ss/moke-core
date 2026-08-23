@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { Container } from '../src/container.js';
-import { PrimitiveDependencyError } from '../src/errors.js';
+import { DependencyResolutionError } from '../src/errors.js';
 import { Injectable, Inject } from '../src/decorators.js';
 import { createToken } from '../src/types.js';
 
@@ -11,24 +11,24 @@ describe('Primitive Dependencies Diagnostics', () => {
     container = new Container();
   });
 
-  it('should throw PrimitiveDependencyError if String is inferred', () => {
+  it('should throw DependencyResolutionError if String is inferred', () => {
     @Injectable()
     class BadService {
       constructor(public val: string) {}
     }
 
     container.transient(BadService);
-    expect(() => container.resolve(BadService)).to.throw(PrimitiveDependencyError, /Moke cannot infer dependency for parameter #0 of BadService/);
+    expect(() => container.resolve(BadService)).to.throw(DependencyResolutionError, /Moke cannot infer dependency for parameter #0 of BadService/);
   });
 
-  it('should throw PrimitiveDependencyError if Number is inferred', () => {
+  it('should throw DependencyResolutionError if Number is inferred', () => {
     @Injectable()
     class BadService {
       constructor(public config: number) {}
     }
 
     container.transient(BadService);
-    expect(() => container.resolve(BadService)).to.throw(PrimitiveDependencyError);
+    expect(() => container.resolve(BadService)).to.throw(DependencyResolutionError);
   });
 
   it('should succeed if primitive is explicitly injected', () => {

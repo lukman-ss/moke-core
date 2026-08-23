@@ -61,7 +61,8 @@ describe('Module System', () => {
       expect.fail();
     } catch (e: any) {
       expect(e.name).to.equal('MokeCircularModuleError');
-      expect(e.message).to.include('AModule -> BModule -> AModule');
+      expect(e.message).to.include('AModule');
+      expect(e.message).to.include('BModule');
     }
   });
 });

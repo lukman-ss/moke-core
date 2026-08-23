@@ -1,3 +1,5 @@
+import { formatToken, formatPath } from './internal/formatter.js';
+
 export class MokeError extends Error {
   constructor(message: string, public readonly code: string) {
     super(message);
@@ -6,12 +8,17 @@ export class MokeError extends Error {
 }
 
 export class UnknownProviderError extends MokeError {
-  constructor(tokenKey: unknown, index?: number, targetName?: string) {
-    const key = typeof tokenKey === 'function' ? tokenKey.name : String(tokenKey);
-    let msg = `Cannot resolve dependency for token: ${key}.`;
+  constructor(tokenKey: unknown, index?: number, targetName?: string, path?: unknown[]) {
+    let msg = `No provider registered for ${formatToken(tokenKey)}.`;
+    
     if (index !== undefined && targetName) {
-      msg = `Cannot resolve constructor dependency at index ${index} for ${targetName}. Type is unknown or an interface. Use @Inject().`;
+      msg = `Unable to resolve parameter #${index} of ${targetName}.\n\nDependency:\n${formatToken(tokenKey)}\n\nReason:\nNo provider registered for ${formatToken(tokenKey)}.`;
     }
+
+    if (path && path.length > 0) {
+      msg += `\n\nResolution path:\n${formatPath(path)}\n→ ${formatToken(tokenKey)}`;
+    }
+
     super(msg, 'MOKE_DI_UNKNOWN_PROVIDER');
     this.name = 'UnknownProviderError';
   }
@@ -19,17 +26,14 @@ export class UnknownProviderError extends MokeError {
 
 export class CircularDependencyError extends MokeError {
   constructor(path: unknown[]) {
-    const format = (p: unknown) => typeof p === 'function' ? p.name : String(p);
-    const pathString = path.map(format).join(' -> ');
-    super(`Circular dependency detected: ${pathString}`, 'MOKE_DI_CIRCULAR_DEPENDENCY');
+    super(`Circular dependency detected:\n${formatPath(path)}`, 'MOKE_DI_CIRCULAR_DEPENDENCY');
     this.name = 'CircularDependencyError';
   }
 }
 
 export class DuplicateProviderError extends MokeError {
   constructor(tokenKey: unknown) {
-    const format = (p: unknown) => typeof p === 'function' ? p.name : String(p);
-    super(`Provider already registered for ${format(tokenKey)}. Use override() to replace it explicitly.`, 'MOKE_DI_DUPLICATE_PROVIDER');
+    super(`Provider already registered for ${formatToken(tokenKey)}. Use override() to replace it explicitly.`, 'MOKE_DI_DUPLICATE_PROVIDER');
     this.name = 'DuplicateProviderError';
   }
 }
@@ -42,33 +46,45 @@ export class InvalidProviderError extends MokeError {
 }
 
 export class AsyncProviderResolutionError extends MokeError {
-  constructor(tokenKey: unknown) {
-    const format = (p: unknown) => typeof p === 'function' ? p.name : String(p);
-    super(`Cannot synchronously resolve async provider for token: ${format(tokenKey)}. Use resolveAsync() instead.`, 'MOKE_DI_ASYNC_PROVIDER_SYNC_RESOLUTION');
+  constructor(tokenKey: unknown, path?: unknown[]) {
+    let msg = `Cannot synchronously resolve async provider for token: ${formatToken(tokenKey)}. Use resolveAsync() instead.`;
+    if (path && path.length > 0) {
+      msg += `\n\nResolution path:\n${formatPath(path)}\n→ ${formatToken(tokenKey)}`;
+    }
+    super(msg, 'MOKE_DI_ASYNC_PROVIDER_SYNC_RESOLUTION');
     this.name = 'AsyncProviderResolutionError';
   }
 }
 
 export class MokeCircularModuleError extends MokeError {
   constructor(path: unknown[]) {
-    const format = (p: unknown) => typeof p === 'function' ? p.name : String(p);
-    const pathString = path.map(format).join(' -> ');
-    super(`Circular module dependency detected: ${pathString}`, 'MOKE_MODULE_CIRCULAR_DEPENDENCY');
+    super(`Circular module dependency detected:\n${formatPath(path)}`, 'MOKE_MODULE_CIRCULAR_DEPENDENCY');
     this.name = 'MokeCircularModuleError';
   }
 }
 
 export class PrimitiveDependencyError extends MokeError {
-  constructor(index: number, targetName: string) {
-    super(`Moke cannot infer dependency for parameter #${index} of ${targetName}. Primitive or interface-like dependencies require an explicit injection token. Use @Inject(TOKEN).`, 'MOKE_DI_PRIMITIVE_DEPENDENCY');
+  constructor(index: number, targetName: string, path?: unknown[]) {
+    let msg = `Moke cannot infer dependency for parameter #${index} of ${targetName}.\nPrimitive or interface-like dependencies require an explicit injection token.\nUse @Inject(TOKEN).`;
+    if (path && path.length > 0) {
+      msg += `\n\nResolution path:\n${formatPath(path)}\n→ Parameter #${index} of ${targetName}`;
+    }
+    super(msg, 'MOKE_DI_PRIMITIVE_DEPENDENCY');
     this.name = 'PrimitiveDependencyError';
   }
 }
 
 export class DependencyResolutionError extends MokeError {
-  constructor(tokenKey: unknown, cause: Error) {
-    const format = (p: unknown) => typeof p === 'function' ? p.name : String(p);
-    super(`Failed to resolve dependency: ${format(tokenKey)}.`, 'MOKE_DI_RESOLUTION_FAILED');
+  constructor(tokenKey: unknown, cause: Error, path?: unknown[]) {
+    let msg = `Failed while constructing ${formatToken(tokenKey)}.`;
+    
+    if (path && path.length > 0) {
+      msg += `\n\nResolution path:\n${formatPath(path)}\n→ ${formatToken(tokenKey)}`;
+    }
+
+    msg += `\n\nCause:\n${cause.message}`;
+
+    super(msg, 'MOKE_DI_RESOLUTION_FAILED');
     this.name = 'DependencyResolutionError';
     this.cause = cause;
   }
