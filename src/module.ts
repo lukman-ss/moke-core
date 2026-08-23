@@ -1,10 +1,11 @@
-import { Constructor } from './types.js';
+import { Constructor, Token } from './types.js';
+import { ProviderDefinition } from './providers.js';
 import { ReflectionHost } from './reflection.js';
 
 export interface ModuleMetadata {
   imports?: Constructor<unknown>[];
-  providers?: any[];
-  exports?: any[];
+  providers?: ProviderDefinition[];
+  exports?: Token[];
 }
 
 export function Module(metadata: ModuleMetadata): ClassDecorator {

@@ -89,7 +89,7 @@ describe('ApplicationContext & Lifecycle', () => {
     expect(order).to.deep.equal(['init', 'bootstrap']);
 
     await app.close();
-    expect(order).to.deep.equal(['init', 'bootstrap', 'destroy', 'shutdown']);
+    expect(order).to.deep.equal(['init', 'bootstrap', 'shutdown', 'destroy']);
   });
 
   it('swallows shutdown errors idempotently', async () => {

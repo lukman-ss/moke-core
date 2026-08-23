@@ -76,24 +76,27 @@ export class MokeApplicationContext {
     if (this._state === 'closed') return;
     this._state = 'closing';
 
-    const instances = this.container.getInstantiatedInstances();
+    // Reverse order for teardown
+    const instances = this.container.getInstantiatedInstances().reverse();
 
-    for (const instance of instances as any[]) {
-      if (typeof instance.onModuleDestroy === 'function') {
-        try {
-          await instance.onModuleDestroy();
-        } catch (e) {
-          // Swallow destroy errors
-        }
-      }
-    }
-
+    // 1. onApplicationShutdown
     for (const instance of instances as any[]) {
       if (typeof instance.onApplicationShutdown === 'function') {
         try {
           await instance.onApplicationShutdown(signal);
         } catch (e) {
           // Swallow shutdown errors
+        }
+      }
+    }
+
+    // 2. onModuleDestroy
+    for (const instance of instances as any[]) {
+      if (typeof instance.onModuleDestroy === 'function') {
+        try {
+          await instance.onModuleDestroy();
+        } catch (e) {
+          // Swallow destroy errors
         }
       }
     }
