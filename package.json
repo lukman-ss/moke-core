@@ -1,6 +1,6 @@
 {
   "name": "@lukman-ss/moke-core",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Core module for Moke web framework. Provides IoC Container, Dependency Injection, and Application Bootstrap.",
   "type": "module",
   "main": "./dist/index.js",
@@ -18,8 +18,9 @@
     "package.json"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.14.0"
   },
+  "packageManager": "npm@12.0.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/lukman-ss/moke-core.git"
@@ -40,7 +41,7 @@
     "test": "cross-env TS_NODE_PROJECT=tsconfig.test.json mocha --loader=ts-node/esm \"test/**/*.test.ts\"",
     "test:watch": "cross-env TS_NODE_PROJECT=tsconfig.test.json mocha --loader=ts-node/esm --watch \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "prepack": "npm run build"
   },
   "dependencies": {
     "reflect-metadata": "^0.1.13"
