@@ -4,7 +4,7 @@ import { Container } from './container.js';
 export type Scope = 'singleton' | 'transient';
 
 export interface ProviderBase<T = any> {
-  provide: Token<T>;
+  provide?: Token<T>;
 }
 
 export interface ClassProvider<T = any> extends ProviderBase<T> {
@@ -26,4 +26,5 @@ export interface ExistingProvider<T = any> extends ProviderBase<T> {
 export type Provider<T = any> = ClassProvider<T> | ValueProvider<T> | FactoryProvider<T> | ExistingProvider<T>;
 
 export type ProviderDefinition<T = any> = Provider<T> | Constructor<T>;
+
 

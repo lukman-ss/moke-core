@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { Constructor, Token, InjectionToken } from './types.js';
 import { Provider, ProviderDefinition, Scope } from './providers.js';
 import { INJECT_METADATA_KEY } from './decorators.js';
-import { AsyncProviderResolutionError } from './errors.js';
+import { AsyncProviderResolutionError, CircularDependencyError, InvalidProviderError } from './errors.js';
 
 interface ProviderRegistration {
   provider: Provider;
@@ -14,14 +14,33 @@ interface ProviderRegistration {
 export class Container {
   private registrations = new Map<any, ProviderRegistration>();
 
+  register<T>(provider: Provider<T>, scope: Scope = 'singleton') {
+    if (!('provide' in provider) || provider.provide === undefined) {
+      throw new InvalidProviderError('Provider must have a "provide" property when using register()');
+    }
+    this.bind(provider.provide, provider, scope);
+  }
+
   bind<T>(token: Token<T>, providerDef: ProviderDefinition<T>, scope: Scope = 'singleton') {
     const key = this.getTokenKey(token);
     let provider: Provider<T>;
 
     if (typeof providerDef === 'function') {
-      provider = { provide: token, useClass: providerDef as Constructor<T> };
+      provider = { useClass: providerDef as Constructor<T> };
     } else {
       provider = providerDef as Provider<T>;
+      
+      if ('provide' in provider && provider.provide !== undefined && provider.provide !== token) {
+        throw new InvalidProviderError(`Mismatch between bound token and provider.provide`);
+      }
+    }
+
+    if (!('useClass' in provider) && !('useValue' in provider) && !('useFactory' in provider) && !('useExisting' in provider)) {
+      throw new InvalidProviderError(`Provider definition is invalid. Must provide useClass, useValue, useFactory, or useExisting.`);
+    }
+
+    if ('useExisting' in provider) {
+      scope = 'transient'; // Alias does not hold its own state/scope
     }
 
     this.registrations.set(key, { provider, scope });
@@ -37,14 +56,14 @@ export class Container {
 
   instance<T>(token: Token<T>, value: T) {
     this.registrations.set(this.getTokenKey(token), {
-      provider: { provide: token, useValue: value },
+      provider: { useValue: value },
       scope: 'singleton',
       instance: value
     });
   }
 
   factory<T>(token: Token<T>, factory: (container: Container) => T | Promise<T>, scope: Scope = 'singleton') {
-    this.bind(token, { provide: token, useFactory: factory }, scope);
+    this.bind(token, { useFactory: factory }, scope);
   }
 
   has<T>(token: Token<T>): boolean {
@@ -52,15 +71,32 @@ export class Container {
   }
 
   resolve<T>(token: Token<T>): T {
+    return this.internalResolveSync(token, []);
+  }
+
+  async resolveAsync<T>(token: Token<T>): Promise<T> {
+    return this.internalResolveAsync(token, []);
+  }
+
+  private internalResolveSync<T>(token: Token<T>, path: any[]): T {
     const key = this.getTokenKey(token);
+    
+    if (path.includes(key)) {
+      throw new CircularDependencyError([...path, key]);
+    }
+
     this.ensureRegistered(key, token);
     const reg = this.registrations.get(key)!;
+
+    if ('useExisting' in reg.provider) {
+      return this.internalResolveSync(reg.provider.useExisting, [...path, key]);
+    }
 
     if (reg.scope === 'singleton' && 'instance' in reg) {
       return reg.instance as T;
     }
 
-    const instance = this.resolveProviderSync(reg.provider, key);
+    const instance = this.resolveProviderSync(reg.provider, key, [...path, key]);
 
     if (reg.scope === 'singleton') {
       reg.instance = instance;
@@ -69,20 +105,29 @@ export class Container {
     return instance;
   }
 
-  async resolveAsync<T>(token: Token<T>): Promise<T> {
+  private async internalResolveAsync<T>(token: Token<T>, path: any[]): Promise<T> {
     const key = this.getTokenKey(token);
+
     this.ensureRegistered(key, token);
     const reg = this.registrations.get(key)!;
-
-    if (reg.scope === 'singleton' && 'instance' in reg) {
-      return reg.instance as T;
-    }
 
     if (reg.scope === 'singleton' && reg.asyncPromise) {
       return reg.asyncPromise;
     }
 
-    const resolutionPromise = this.resolveProviderAsync(reg.provider);
+    if (path.includes(key)) {
+      throw new CircularDependencyError([...path, key]);
+    }
+
+    if ('useExisting' in reg.provider) {
+      return this.internalResolveAsync(reg.provider.useExisting, [...path, key]);
+    }
+
+    if (reg.scope === 'singleton' && 'instance' in reg) {
+      return reg.instance as T;
+    }
+
+    const resolutionPromise = this.resolveProviderAsync(reg.provider, [...path, key]);
 
     if (reg.scope === 'singleton') {
       reg.asyncPromise = resolutionPromise;
@@ -108,54 +153,62 @@ export class Container {
     }
   }
 
-  private resolveProviderSync(provider: Provider, key: any): any {
+  private resolveProviderSync(provider: Provider, key: any, path: any[]): any {
     if ('useValue' in provider) {
       return provider.useValue;
     }
 
     if ('useFactory' in provider) {
-      const result = provider.useFactory(this);
-      if (result instanceof Promise) {
-        throw new AsyncProviderResolutionError(key);
+      // Temporarily inject internalResolve to track path inside factory
+      const originalResolve = this.resolve;
+      try {
+        this.resolve = (t: any) => this.internalResolveSync(t, path);
+        const result = provider.useFactory(this);
+        if (result instanceof Promise) {
+          throw new AsyncProviderResolutionError(key);
+        }
+        return result;
+      } finally {
+        this.resolve = originalResolve;
       }
-      return result;
-    }
-
-    if ('useExisting' in provider) {
-      return this.resolve(provider.useExisting);
     }
 
     if ('useClass' in provider) {
-      return this.instantiateClassSync(provider.useClass);
+      return this.instantiateClassSync(provider.useClass, path);
     }
   }
 
-  private async resolveProviderAsync(provider: Provider): Promise<any> {
+  private async resolveProviderAsync(provider: Provider, path: any[]): Promise<any> {
     if ('useValue' in provider) {
       return provider.useValue;
     }
 
     if ('useFactory' in provider) {
-      return provider.useFactory(this);
-    }
-
-    if ('useExisting' in provider) {
-      return this.resolveAsync(provider.useExisting);
+      const originalResolveAsync = this.resolveAsync;
+      const originalResolve = this.resolve;
+      try {
+        this.resolveAsync = (t: any) => this.internalResolveAsync(t, path);
+        this.resolve = (t: any) => this.internalResolveSync(t, path);
+        return await provider.useFactory(this);
+      } finally {
+        this.resolveAsync = originalResolveAsync;
+        this.resolve = originalResolve;
+      }
     }
 
     if ('useClass' in provider) {
-      return this.instantiateClassAsync(provider.useClass);
+      return this.instantiateClassAsync(provider.useClass, path);
     }
   }
 
-  private instantiateClassSync<T>(target: Constructor<T>): T {
-    const injections = this.getConstructorInjections(target).map(t => this.resolve(t));
+  private instantiateClassSync<T>(target: Constructor<T>, path: any[]): T {
+    const injections = this.getConstructorInjections(target).map(t => this.internalResolveSync(t, path));
     return new target(...injections);
   }
 
-  private async instantiateClassAsync<T>(target: Constructor<T>): Promise<T> {
+  private async instantiateClassAsync<T>(target: Constructor<T>, path: any[]): Promise<T> {
     const injections = await Promise.all(
-      this.getConstructorInjections(target).map(t => this.resolveAsync(t))
+      this.getConstructorInjections(target).map(t => this.internalResolveAsync(t, path))
     );
     return new target(...injections);
   }

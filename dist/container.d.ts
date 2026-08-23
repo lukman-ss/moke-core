@@ -1,8 +1,9 @@
 import 'reflect-metadata';
 import { Token } from './types.js';
-import { ProviderDefinition, Scope } from './providers.js';
+import { Provider, ProviderDefinition, Scope } from './providers.js';
 export declare class Container {
     private registrations;
+    register<T>(provider: Provider<T>, scope?: Scope): void;
     bind<T>(token: Token<T>, providerDef: ProviderDefinition<T>, scope?: Scope): void;
     singleton<T>(token: Token<T>, providerDef?: ProviderDefinition<T>): void;
     transient<T>(token: Token<T>, providerDef?: ProviderDefinition<T>): void;
@@ -10,8 +11,15 @@ export declare class Container {
     factory<T>(token: Token<T>, factory: (container: Container) => T | Promise<T>, scope?: Scope): void;
     has<T>(token: Token<T>): boolean;
     resolve<T>(token: Token<T>): T;
-    private resolveProvider;
-    private instantiateClass;
+    resolveAsync<T>(token: Token<T>): Promise<T>;
+    private internalResolveSync;
+    private internalResolveAsync;
+    private ensureRegistered;
+    private resolveProviderSync;
+    private resolveProviderAsync;
+    private instantiateClassSync;
+    private instantiateClassAsync;
+    private getConstructorInjections;
     private getTokenKey;
 }
 //# sourceMappingURL=container.d.ts.map

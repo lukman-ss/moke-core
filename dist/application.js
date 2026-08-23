@@ -5,8 +5,13 @@ export class MokeFactory {
         const container = new Container();
         // Default providers
         container.instance(MokeLogger, new MokeLogger());
-        const app = container.resolve(module);
-        return app;
+        return container.resolve(module);
+    }
+    static async createAsync(module) {
+        const container = new Container();
+        // Default providers
+        container.instance(MokeLogger, new MokeLogger());
+        return container.resolveAsync(module);
     }
 }
 //# sourceMappingURL=application.js.map

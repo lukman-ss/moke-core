@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { Container } from '../src/container.js';
 import { createToken } from '../src/types.js';
 import { Inject, Injectable } from '../src/decorators.js';
-import { AsyncProviderResolutionError } from '../src/errors.js';
+import { AsyncProviderResolutionError, CircularDependencyError, InvalidProviderError } from '../src/errors.js';
 
 describe('Container', () => {
   let container: Container;
@@ -52,17 +52,18 @@ describe('Container', () => {
     expect(container.resolve(TOKEN)).to.equal(2);
   });
 
-  it('should support existing provider', () => {
+  it('should support existing provider semantics (alias)', () => {
     class Logger {}
     const TOKEN = createToken<Logger>('LOGGER');
 
-    container.singleton(Logger);
-    container.bind(TOKEN, { provide: TOKEN, useExisting: Logger });
+    // Make target transient to prove alias doesn't cache it
+    container.transient(Logger);
+    container.bind(TOKEN, { useExisting: Logger });
 
-    const logger1 = container.resolve(Logger);
-    const logger2 = container.resolve(TOKEN);
+    const loggerFromAlias1 = container.resolve(TOKEN);
+    const loggerFromAlias2 = container.resolve(TOKEN);
 
-    expect(logger1).to.equal(logger2);
+    expect(loggerFromAlias1).to.not.equal(loggerFromAlias2);
   });
 
   it('should auto-bind unhandled classes as singleton', () => {
@@ -211,5 +212,86 @@ describe('Container', () => {
 
     const instance = await container.resolveAsync(Target);
     expect(instance.dep).to.equal('async-dep-value');
+  });
+
+  // --- Circular Dependency Tests ---
+
+  it('should detect direct A -> A cycle', () => {
+    @Injectable()
+    class A {
+      constructor(public a: A) {}
+    }
+
+    container.singleton(A);
+    expect(() => container.resolve(A)).to.throw(CircularDependencyError, /A -> A/);
+  });
+
+  it('should detect A -> B -> A cycle', () => {
+    class A {}
+    class B {}
+
+    // Manually register to simulate circular metadata
+    container.bind(A, { useFactory: (c: Container) => new A() } as any);
+    container.bind(B, { useFactory: (c: Container) => new B() } as any);
+
+    // Patch factories to resolve each other to trigger cycle
+    (container as any).registrations.get(A).provider.useFactory = (c: Container) => { c.resolve(B); return new A(); };
+    (container as any).registrations.get(B).provider.useFactory = (c: Container) => { c.resolve(A); return new B(); };
+
+    expect(() => container.resolve(A)).to.throw(CircularDependencyError, /A -> B -> A/);
+  });
+
+  it('should detect useExisting cycle', () => {
+    const T1 = createToken('T1');
+    const T2 = createToken('T2');
+    container.bind(T1, { useExisting: T2 });
+    container.bind(T2, { useExisting: T1 });
+
+    expect(() => container.resolve(T1)).to.throw(CircularDependencyError, /Symbol\(T1\) -> Symbol\(T2\) -> Symbol\(T1\)/);
+  });
+
+  it('should not throw on valid diamond non-cycle', () => {
+    class Leaf {}
+    
+    @Injectable()
+    class Left {
+      constructor(public leaf: Leaf) {}
+    }
+
+    @Injectable()
+    class Right {
+      constructor(public leaf: Leaf) {}
+    }
+
+    @Injectable()
+    class Root {
+      constructor(public left: Left, public right: Right) {}
+    }
+
+    const root = container.resolve(Root);
+    expect(root.left.leaf).to.be.instanceOf(Leaf);
+    expect(root.right.leaf).to.be.instanceOf(Leaf);
+  });
+
+  // --- Provider Ambiguity Validation Tests ---
+
+  it('should throw InvalidProviderError on malformed provider', () => {
+    expect(() => container.bind('token', {} as any)).to.throw(InvalidProviderError);
+  });
+
+  it('should throw InvalidProviderError if bind token mismatch', () => {
+    const T1 = createToken('T1');
+    const T2 = createToken('T2');
+    expect(() => container.bind(T1, { provide: T2, useValue: 'val' })).to.throw(InvalidProviderError);
+  });
+
+  it('should support register()', () => {
+    const T1 = createToken<string>('T1');
+    container.register({ provide: T1, useValue: 'value1' });
+    expect(container.resolve(T1)).to.equal('value1');
+  });
+
+  it('should throw if register() missing provide', () => {
+    expect(() => container.register({ useValue: 'val' } as any)).to.throw(InvalidProviderError);
   });
 });
