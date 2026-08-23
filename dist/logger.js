@@ -1,9 +1,26 @@
-export class MokeLogger {
-    log(message) {
-        console.log(`[Moke] ${message}`);
+export class ConsoleLogger {
+    context;
+    constructor(context) {
+        this.context = context;
     }
-    error(message, trace) {
-        console.error(`[Moke ERROR] ${message}`, trace || '');
+    log(message, context) {
+        console.log(this.format('LOG', message, context));
     }
+    debug(message, context) {
+        console.debug(this.format('DEBUG', message, context));
+    }
+    warn(message, context) {
+        console.warn(this.format('WARN', message, context));
+    }
+    error(message, trace, context) {
+        console.error(this.format('ERROR', message, context), trace ? `\n${trace}` : '');
+    }
+    format(level, message, context) {
+        const ctx = context || this.context;
+        return `[Moke] ${level} ${ctx ? `[${ctx}] ` : ''}${message}`;
+    }
+}
+/** @deprecated Use ConsoleLogger instead */
+export class MokeLogger extends ConsoleLogger {
 }
 //# sourceMappingURL=logger.js.map

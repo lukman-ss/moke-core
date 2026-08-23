@@ -25,8 +25,14 @@
     "type": "git",
     "url": "https://github.com/lukman-ss/moke-core.git"
   },
+  "homepage": "https://github.com/lukman-ss/moke-core#readme",
+  "bugs": {
+    "url": "https://github.com/lukman-ss/moke-core/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
-    "moke",
     "core",
     "framework",
     "ioc",
@@ -44,7 +50,7 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "reflect-metadata": "^0.1.13"
+    "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",
@@ -53,6 +59,6 @@
     "cross-env": "^10.1.0",
     "mocha": "^11.8.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.2.2"
+    "typescript": "^7.0.2"
   }
 }
