@@ -48,18 +48,44 @@ describe('Container Scopes & Lifecycle', () => {
       expect(r1).to.not.equal(r2);
     });
 
-    it('child should be able to override parent registration locally', () => {
-      const TOKEN = createToken<string>('T1');
-      root.instance(TOKEN, 'root');
+    it('should support scoped async factory instances', async () => {
+      class DB {}
+      let calls = 0;
+      root.scoped(DB, {
+        useFactory: async () => {
+          calls++;
+          return new DB();
+        }
+      });
 
       const childA = root.createChild();
-      childA.instance(TOKEN, 'childA');
-
       const childB = root.createChild();
 
-      expect(root.resolve(TOKEN)).to.equal('root');
-      expect(childA.resolve(TOKEN)).to.equal('childA');
-      expect(childB.resolve(TOKEN)).to.equal('root');
+      const [dbA1, dbA2] = await Promise.all([
+        childA.resolveAsync(DB),
+        childA.resolveAsync(DB)
+      ]);
+
+      const dbB = await childB.resolveAsync(DB);
+
+      expect(dbA1).to.equal(dbA2);
+      expect(dbA1).to.not.equal(dbB);
+      expect(calls).to.equal(2);
+    });
+
+    it('child overrides parent transparently', () => {
+      class Target {}
+      root.instance(Target, { val: 'root' });
+
+      const childA = root.createChild();
+      const childB = root.createChild();
+      
+      childA.instance(Target, { val: 'childA' });
+      childB.instance(Target, { val: 'childB' });
+
+      expect(root.resolve(Target)).to.deep.equal({ val: 'root' });
+      expect(childA.resolve(Target)).to.deep.equal({ val: 'childA' });
+      expect(childB.resolve(Target)).to.deep.equal({ val: 'childB' });
     });
 
     it('value providers are inherited correctly', () => {

@@ -26,6 +26,14 @@ export class CircularDependencyError extends MokeError {
   }
 }
 
+export class DuplicateProviderError extends MokeError {
+  constructor(tokenKey: unknown) {
+    const format = (p: unknown) => typeof p === 'function' ? p.name : String(p);
+    super(`Provider already registered for ${format(tokenKey)}. Use override() to replace it explicitly.`, 'MOKE_DI_DUPLICATE_PROVIDER');
+    this.name = 'DuplicateProviderError';
+  }
+}
+
 export class InvalidProviderError extends MokeError {
   constructor(message: string) {
     super(message, 'MOKE_DI_INVALID_PROVIDER');

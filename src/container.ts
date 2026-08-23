@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { Constructor, Token, InjectionToken } from './types.js';
 import { Provider, ProviderDefinition, Scope } from './providers.js';
 import { ReflectionHost } from './reflection.js';
-import { AsyncProviderResolutionError, CircularDependencyError, InvalidProviderError, UnknownProviderError, DependencyResolutionError } from './errors.js';
+import { AsyncProviderResolutionError, CircularDependencyError, InvalidProviderError, UnknownProviderError, DependencyResolutionError, DuplicateProviderError } from './errors.js';
 
 interface ProviderRegistration {
   provider: Provider;
@@ -30,7 +30,20 @@ export class Container {
   }
 
   bind<T>(token: Token<T>, providerDef: ProviderDefinition<T>, scope: Scope = 'singleton'): void {
+    this.internalBind(token, providerDef, scope, false);
+  }
+
+  override<T>(token: Token<T>, providerDef: ProviderDefinition<T>, scope: Scope = 'singleton'): void {
+    this.internalBind(token, providerDef, scope, true);
+  }
+
+  private internalBind<T>(token: Token<T>, providerDef: ProviderDefinition<T>, scope: Scope, isOverride: boolean): void {
     const key = this.getTokenKey(token);
+
+    if (!isOverride && this.hasOwn(token)) {
+      throw new DuplicateProviderError(key);
+    }
+
     let provider: Provider<T>;
 
     if (typeof providerDef === 'function') {
@@ -67,7 +80,9 @@ export class Container {
   }
 
   instance<T>(token: Token<T>, value: T): void {
-    this.registrations.set(this.getTokenKey(token), {
+    const key = this.getTokenKey(token);
+    if (this.hasOwn(token)) throw new DuplicateProviderError(key);
+    this.registrations.set(key, {
       provider: { useValue: value },
       scope: 'singleton',
       instance: value
@@ -81,6 +96,10 @@ export class Container {
 
   has<T>(token: Token<T>): boolean {
     return this.hasRegistration(this.getTokenKey(token));
+  }
+
+  hasOwn<T>(token: Token<T>): boolean {
+    return this.registrations.has(this.getTokenKey(token));
   }
 
   resolve<T>(token: Token<T>): T {
