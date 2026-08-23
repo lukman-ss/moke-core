@@ -1,7 +1,7 @@
 import { Constructor, Token } from './types.js';
 import { Container } from './container.js';
 
-export type Scope = 'singleton' | 'transient';
+export type Scope = 'singleton' | 'scoped' | 'transient';
 
 export interface ProviderBase<T = any> {
   provide?: Token<T>;
