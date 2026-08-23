@@ -49,6 +49,13 @@ export class AsyncProviderResolutionError extends MokeError {
   }
 }
 
+export class PrimitiveDependencyError extends MokeError {
+  constructor(index: number, targetName: string) {
+    super(`Moke cannot infer dependency for parameter #${index} of ${targetName}. Primitive or interface-like dependencies require an explicit injection token. Use @Inject(TOKEN).`, 'MOKE_DI_PRIMITIVE_DEPENDENCY');
+    this.name = 'PrimitiveDependencyError';
+  }
+}
+
 export class DependencyResolutionError extends MokeError {
   constructor(tokenKey: unknown, cause: Error) {
     const format = (p: unknown) => typeof p === 'function' ? p.name : String(p);

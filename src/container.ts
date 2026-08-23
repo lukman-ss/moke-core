@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { Constructor, Token, InjectionToken } from './types.js';
 import { Provider, ProviderDefinition, Scope } from './providers.js';
 import { ReflectionHost } from './reflection.js';
-import { AsyncProviderResolutionError, CircularDependencyError, InvalidProviderError, UnknownProviderError, DependencyResolutionError, DuplicateProviderError } from './errors.js';
+import { AsyncProviderResolutionError, CircularDependencyError, InvalidProviderError, UnknownProviderError, DependencyResolutionError, DuplicateProviderError, PrimitiveDependencyError } from './errors.js';
 
 interface ProviderRegistration {
   provider: Provider;
@@ -115,7 +115,7 @@ export class Container {
     try {
       return this.internalResolveSync(token, []) as T;
     } catch (e: any) {
-      if (e.name === 'DependencyResolutionError' || e.name === 'CircularDependencyError' || e.name === 'UnknownProviderError' || e.name === 'AsyncProviderResolutionError') throw e;
+      if (e.name === 'DependencyResolutionError' || e.name === 'CircularDependencyError' || e.name === 'UnknownProviderError' || e.name === 'AsyncProviderResolutionError' || e.name === 'PrimitiveDependencyError') throw e;
       throw new DependencyResolutionError(token, e);
     }
   }
@@ -124,7 +124,7 @@ export class Container {
     try {
       return await this.internalResolveAsync(token, []) as T;
     } catch (e: any) {
-      if (e.name === 'DependencyResolutionError' || e.name === 'CircularDependencyError' || e.name === 'UnknownProviderError') throw e;
+      if (e.name === 'DependencyResolutionError' || e.name === 'CircularDependencyError' || e.name === 'UnknownProviderError' || e.name === 'PrimitiveDependencyError') throw e;
       throw new DependencyResolutionError(token, e);
     }
   }
@@ -339,9 +339,15 @@ export class Container {
     return paramTypes.map((type: unknown, index: number) => {
       const explicit = explicitInjections.find(e => e.index === index);
       if (explicit) return explicit.token;
-      if (!type || type === Object) {
+
+      if (!type) {
         throw new UnknownProviderError(null, index, target.name);
       }
+
+      if (type === String || type === Number || type === Boolean || type === Object || type === Array || type === Function || type === Promise || type === Symbol) {
+        throw new PrimitiveDependencyError(index, target.name);
+      }
+
       return type as Token;
     });
   }
