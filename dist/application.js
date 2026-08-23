@@ -1,6 +1,7 @@
 import { Container } from './container.js';
 import { MokeLogger } from './logger.js';
 import { ReflectionHost } from './reflection.js';
+import { MokeCircularModuleError } from './errors.js';
 export class MokeApplicationContext {
     container;
     _state = 'created';
@@ -115,38 +116,55 @@ export class MokeFactory {
         // Core default registrations
         container.instance(MokeLogger, new MokeLogger());
         container.bind('Logger', { useExisting: MokeLogger });
-        await this.compileModuleAsync(module, container, new Set());
+        await this.compileModuleAsync(module, container, new Set(), []);
         await container.resolveAsync(module); // Resolve the root module to trigger graph instantiation
         return new MokeApplicationContext(container);
     }
-    static async compileModuleAsync(module, container, resolved) {
+    static async compileModuleAsync(module, container, resolved, path) {
+        if (path.includes(module)) {
+            throw new MokeCircularModuleError([...path, module]);
+        }
         if (resolved.has(module))
             return;
-        resolved.add(module);
+        path.push(module);
         const metadata = ReflectionHost.getModuleMetadata(module);
         if (!metadata) {
             container.singleton(module);
+            resolved.add(module);
+            path.pop();
             return;
         }
         if (metadata.imports) {
             for (const imported of metadata.imports) {
-                await this.compileModuleAsync(imported, container, resolved);
+                await this.compileModuleAsync(imported, container, resolved, path);
             }
         }
         if (metadata.providers) {
             for (const provider of metadata.providers) {
                 if (typeof provider === 'function') {
-                    container.singleton(provider);
+                    // Provide default singleton bindings only if not already bound
+                    // In an encapsulated model, this logic will branch. Here in the flattened model, we skip if already explicitly bound.
+                    if (!container.hasOwn(provider)) {
+                        container.singleton(provider);
+                    }
                 }
                 else {
-                    container.register(provider);
+                    const providerDef = provider;
+                    if (providerDef.provide && !container.hasOwn(providerDef.provide)) {
+                        container.register(providerDef);
+                    }
                 }
             }
         }
         // Exports behavior in core is currently flattened globally.
-        // Full module encapsulation (where providers are hidden) can be added later 
-        // by using child containers per-module if needed.
-        container.singleton(module);
+        // In Model B (Encapsulated), each module would get a child container,
+        // and exports would be forwarded.
+        // For Moke's simplicity vs NestJS-like complexity, we use a flattened global DI by default.
+        if (!container.hasOwn(module)) {
+            container.singleton(module);
+        }
+        resolved.add(module);
+        path.pop();
     }
 }
 //# sourceMappingURL=application.js.map

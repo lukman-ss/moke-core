@@ -49,6 +49,15 @@ export class AsyncProviderResolutionError extends MokeError {
   }
 }
 
+export class MokeCircularModuleError extends MokeError {
+  constructor(path: unknown[]) {
+    const format = (p: unknown) => typeof p === 'function' ? p.name : String(p);
+    const pathString = path.map(format).join(' -> ');
+    super(`Circular module dependency detected: ${pathString}`, 'MOKE_MODULE_CIRCULAR_DEPENDENCY');
+    this.name = 'MokeCircularModuleError';
+  }
+}
+
 export class PrimitiveDependencyError extends MokeError {
   constructor(index: number, targetName: string) {
     super(`Moke cannot infer dependency for parameter #${index} of ${targetName}. Primitive or interface-like dependencies require an explicit injection token. Use @Inject(TOKEN).`, 'MOKE_DI_PRIMITIVE_DEPENDENCY');

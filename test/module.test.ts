@@ -41,28 +41,27 @@ describe('Module System', () => {
     expect(app.get(RootService)).to.be.instanceOf(RootService);
   });
 
-  it('handles module cycles gracefully (idempotent compilation)', async () => {
-    class AService {}
-    class BService {}
-
+  it('detects circular module imports', async () => {
     // using function indirection to bypass temporal dead zone on cyclical decorators
     let BModuleRef: any;
 
     @Module({
-      providers: [AService],
       get imports() { return [BModuleRef]; }
     })
     class AModule {}
 
     @Module({
-      providers: [BService],
       imports: [AModule]
     })
     class BModule {}
     BModuleRef = BModule;
 
-    const app = await MokeFactory.createApplicationContext(AModule);
-    expect(app.get(AService)).to.be.instanceOf(AService);
-    expect(app.get(BService)).to.be.instanceOf(BService);
+    try {
+      await MokeFactory.createApplicationContext(AModule);
+      expect.fail();
+    } catch (e: any) {
+      expect(e.name).to.equal('MokeCircularModuleError');
+      expect(e.message).to.include('AModule -> BModule -> AModule');
+    }
   });
 });
