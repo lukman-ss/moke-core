@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { ReflectionHost } from './reflection.js';
-import { AsyncProviderResolutionError, CircularDependencyError, InvalidProviderError, UnknownProviderError, DependencyResolutionError } from './errors.js';
+import { AsyncProviderResolutionError, CircularDependencyError, InvalidProviderError, UnknownProviderError, DependencyResolutionError, DuplicateProviderError, PrimitiveDependencyError } from './errors.js';
 export class Container {
     parent;
     registrations = new Map();
@@ -19,7 +19,23 @@ export class Container {
         this.bind(provider.provide, provider, scope);
     }
     bind(token, providerDef, scope = 'singleton') {
+        this.internalBind(token, providerDef, scope, false);
+    }
+    override(token, providerDef, scope = 'singleton') {
+        this.internalBind(token, providerDef, scope, true);
+    }
+    internalBind(token, providerDef, scope, isOverride) {
         const key = this.getTokenKey(token);
+        if (!isOverride && this.hasOwn(token)) {
+            throw new DuplicateProviderError(key);
+        }
+        if (isOverride && this.registrations.has(key)) {
+            const existing = this.registrations.get(key);
+            // Clean up old instances/promises to allow immediate substitution
+            if (existing.instance && typeof existing.instance === 'object') {
+                this.instantiatedInstances.delete(existing.instance);
+            }
+        }
         let provider;
         if (typeof providerDef === 'function') {
             provider = { useClass: providerDef };
@@ -36,6 +52,7 @@ export class Container {
         if ('useExisting' in provider) {
             scope = 'transient';
         }
+        // Always create a fresh registration entry without instance or asyncPromise attached
         this.registrations.set(key, { provider, scope });
     }
     singleton(token, providerDef) {
@@ -48,7 +65,10 @@ export class Container {
         this.bind(token, providerDef || token, 'transient');
     }
     instance(token, value) {
-        this.registrations.set(this.getTokenKey(token), {
+        const key = this.getTokenKey(token);
+        if (this.hasOwn(token))
+            throw new DuplicateProviderError(key);
+        this.registrations.set(key, {
             provider: { useValue: value },
             scope: 'singleton',
             instance: value
@@ -61,12 +81,15 @@ export class Container {
     has(token) {
         return this.hasRegistration(this.getTokenKey(token));
     }
+    hasOwn(token) {
+        return this.registrations.has(this.getTokenKey(token));
+    }
     resolve(token) {
         try {
             return this.internalResolveSync(token, []);
         }
         catch (e) {
-            if (e.name === 'DependencyResolutionError' || e.name === 'CircularDependencyError' || e.name === 'UnknownProviderError' || e.name === 'AsyncProviderResolutionError')
+            if (e.name === 'DependencyResolutionError' || e.name === 'CircularDependencyError' || e.name === 'UnknownProviderError' || e.name === 'AsyncProviderResolutionError' || e.name === 'PrimitiveDependencyError')
                 throw e;
             throw new DependencyResolutionError(token, e);
         }
@@ -76,7 +99,7 @@ export class Container {
             return await this.internalResolveAsync(token, []);
         }
         catch (e) {
-            if (e.name === 'DependencyResolutionError' || e.name === 'CircularDependencyError' || e.name === 'UnknownProviderError')
+            if (e.name === 'DependencyResolutionError' || e.name === 'CircularDependencyError' || e.name === 'UnknownProviderError' || e.name === 'PrimitiveDependencyError')
                 throw e;
             throw new DependencyResolutionError(token, e);
         }
@@ -265,8 +288,11 @@ export class Container {
             const explicit = explicitInjections.find(e => e.index === index);
             if (explicit)
                 return explicit.token;
-            if (!type || type === Object) {
+            if (!type) {
                 throw new UnknownProviderError(null, index, target.name);
+            }
+            if (type === String || type === Number || type === Boolean || type === Object || type === Array || type === Function || type === Promise || type === Symbol) {
+                throw new PrimitiveDependencyError(index, target.name);
             }
             return type;
         });
