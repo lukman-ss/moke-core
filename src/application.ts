@@ -1,7 +1,8 @@
 import { Container } from './container.js';
 import { ConsoleLogger, Logger, MokeLogger } from './logger.js';
 import { Constructor, Token } from './types.js';
-import { Provider } from './providers.js';
+import { ServiceProvider } from './service-provider.js';
+import { ProviderDefinition, Scope, Provider } from './providers.js';
 import { ReflectionHost } from './reflection.js';
 
 import { MokeCircularModuleError, MokeBootstrapError, MokeShutdownError } from './errors.js';
@@ -11,6 +12,7 @@ export type ApplicationState = 'created' | 'initializing' | 'ready' | 'closing' 
 export class MokeApplicationContext {
   private _state: ApplicationState = 'created';
   private initPromise?: Promise<void>;
+  private isRegistrationFrozen = false;
 
   constructor(public readonly container: Container) {}
 
@@ -22,12 +24,57 @@ export class MokeApplicationContext {
     return this.container.resolve(token);
   }
 
+  /** @deprecated Use get() instead */
   resolve<T>(token: Token<T>): T {
-    return this.container.resolve(token);
+    return this.get(token);
   }
 
-  async resolveAsync<T>(token: Token<T>): Promise<T> {
+  getAsync<T>(token: Token<T>): Promise<T> {
     return this.container.resolveAsync(token);
+  }
+
+  /** @deprecated Use getAsync() instead */
+  async resolveAsync<T>(token: Token<T>): Promise<T> {
+    return this.getAsync(token);
+  }
+
+  register<T>(token: Token<T>, providerDef: ProviderDefinition<T>, scope: Scope = 'singleton'): void {
+    if (this._state !== 'created') {
+      throw new Error('Cannot register providers after application has been initialized');
+    }
+    this.container.bind(token, providerDef, scope);
+  }
+
+  async registerProvider(provider: ServiceProvider): Promise<void> {
+    if (this._state !== 'created') {
+      throw new Error('Cannot register providers after application has been initialized');
+    }
+    
+    const registeredProviders = Reflect.getMetadata('moke:registeredProviders', provider) || [];
+    if (registeredProviders.includes(provider.constructor)) {
+      throw new Error(`ServiceProvider ${provider.constructor.name} has already been registered. Use register() instead of registerProvider() for class-based providers.`);
+    }
+    
+    Reflect.defineMetadata('moke:registeredProviders', [...registeredProviders, provider.constructor], provider);
+    
+    await provider.register?.();
+  }
+
+  async bootProviders(): Promise<void> {
+    const bootQueue: ServiceProvider[] = [];
+    
+    for (const instance of this.container.getInstantiatedInstances()) {
+      if (instance instanceof ServiceProvider) {
+        const registered = Reflect.getMetadata('moke:registeredProviders', instance) || [];
+        if (registered.length > 0) {
+          bootQueue.push(instance);
+        }
+      }
+    }
+    
+    for (const provider of bootQueue) {
+      await provider.boot?.();
+    }
   }
 
   async init(): Promise<void> {
@@ -45,9 +92,10 @@ export class MokeApplicationContext {
 
     try {
       await this.initPromise;
+      this.container.freeze();
       this._state = 'ready';
     } catch (e) {
-      this._state = 'created'; // Fallback to created so it can be retried if needed
+      this._state = 'created';
       throw e;
     } finally {
       this.initPromise = undefined;

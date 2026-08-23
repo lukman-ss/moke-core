@@ -17,9 +17,17 @@ export interface ValueProvider<T = unknown> extends ProviderBase<T> {
   useValue: T;
 }
 
+export interface Resolver {
+  resolve<T>(token: Token<T>): T;
+  resolveAsync<T>(token: Token<T>): Promise<T>;
+}
+
 export interface FactoryProvider<T = unknown> extends ProviderBase<T> {
-  // Factory must return T or Promise<T>
-  useFactory: (container: Container) => T | Promise<T>;
+  // Factory receives restricted resolver instead of full Container
+  // This prevents mutation of registrations during resolution
+  useFactory: (resolver: Resolver) => T | Promise<T>;
+  // Ponytail: scope is currently ignored on raw FactoryProvider. Use container.factory() to set scope.
+  scope?: Scope;
 }
 
 export interface ExistingProvider<T = unknown> extends ProviderBase<T> {

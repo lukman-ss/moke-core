@@ -146,7 +146,34 @@ describe('Container', () => {
     const TOKEN = createToken<string>('ASYNC_FACTORY_FAIL');
     container.factory(TOKEN, async () => 'fail-val');
     
-    expect(() => container.resolve(TOKEN)).to.throw(DependencyResolutionError);
+    try {
+      container.resolve(TOKEN);
+      expect.fail();
+    } catch (e: any) {
+      expect(e).to.be.instanceOf(DependencyResolutionError);
+      expect(e.cause).to.be.instanceOf(Error);
+      expect(e.cause.name).to.equal('AsyncProviderResolutionError');
+      expect(e.message).to.include('Failed while constructing "ASYNC_FACTORY_FAIL"');
+      expect(e.cause.message).to.include('Cannot synchronously resolve async provider for token: "ASYNC_FACTORY_FAIL". Use resolveAsync() instead.');
+    }
+  });
+
+  it('should detect nested async dependency in sync graph and direct to resolveAsync', () => {
+    const ASYNC_TOKEN = createToken<string>('ASYNC_TOKEN');
+    container.factory(ASYNC_TOKEN, async () => 'async-val');
+
+    @Injectable()
+    class SyncRoot {
+      constructor(@Inject(ASYNC_TOKEN) public val: string) {}
+    }
+
+    try {
+      container.resolve(SyncRoot);
+      expect.fail();
+    } catch (e: any) {
+      expect(e.cause.name).to.equal('AsyncProviderResolutionError');
+      expect(e.cause.message).to.include('Cannot synchronously resolve async provider for token: "ASYNC_TOKEN". Use resolveAsync() instead.');
+    }
   });
 
   it('should resolve async singleton only once (cache in-flight promise)', async () => {

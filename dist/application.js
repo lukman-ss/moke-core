@@ -1,11 +1,13 @@
 import { Container } from './container.js';
 import { MokeLogger } from './logger.js';
+import { ServiceProvider } from './service-provider.js';
 import { ReflectionHost } from './reflection.js';
 import { MokeCircularModuleError, MokeBootstrapError, MokeShutdownError } from './errors.js';
 export class MokeApplicationContext {
     container;
     _state = 'created';
     initPromise;
+    isRegistrationFrozen = false;
     constructor(container) {
         this.container = container;
     }
@@ -15,11 +17,47 @@ export class MokeApplicationContext {
     get(token) {
         return this.container.resolve(token);
     }
+    /** @deprecated Use get() instead */
     resolve(token) {
-        return this.container.resolve(token);
+        return this.get(token);
     }
-    async resolveAsync(token) {
+    getAsync(token) {
         return this.container.resolveAsync(token);
+    }
+    /** @deprecated Use getAsync() instead */
+    async resolveAsync(token) {
+        return this.getAsync(token);
+    }
+    register(token, providerDef, scope = 'singleton') {
+        if (this._state !== 'created') {
+            throw new Error('Cannot register providers after application has been initialized');
+        }
+        this.container.bind(token, providerDef, scope);
+    }
+    async registerProvider(provider) {
+        if (this._state !== 'created') {
+            throw new Error('Cannot register providers after application has been initialized');
+        }
+        const registeredProviders = Reflect.getMetadata('moke:registeredProviders', provider) || [];
+        if (registeredProviders.includes(provider.constructor)) {
+            throw new Error(`ServiceProvider ${provider.constructor.name} has already been registered. Use register() instead of registerProvider() for class-based providers.`);
+        }
+        Reflect.defineMetadata('moke:registeredProviders', [...registeredProviders, provider.constructor], provider);
+        await provider.register?.();
+    }
+    async bootProviders() {
+        const bootQueue = [];
+        for (const instance of this.container.getInstantiatedInstances()) {
+            if (instance instanceof ServiceProvider) {
+                const registered = Reflect.getMetadata('moke:registeredProviders', instance) || [];
+                if (registered.length > 0) {
+                    bootQueue.push(instance);
+                }
+            }
+        }
+        for (const provider of bootQueue) {
+            await provider.boot?.();
+        }
     }
     async init() {
         if (this._state === 'ready')
@@ -34,10 +72,11 @@ export class MokeApplicationContext {
         this.initPromise = this._initImpl();
         try {
             await this.initPromise;
+            this.container.freeze();
             this._state = 'ready';
         }
         catch (e) {
-            this._state = 'created'; // Fallback to created so it can be retried if needed
+            this._state = 'created';
             throw e;
         }
         finally {

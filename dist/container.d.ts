@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { Token } from './types.js';
-import { Provider, ProviderDefinition, Scope } from './providers.js';
+import { Provider, ProviderDefinition, Scope, Resolver } from './providers.js';
 interface ProviderRegistration {
     provider: Provider;
     scope: Scope;
@@ -12,8 +12,12 @@ export declare class Container {
     private registrations;
     private instantiatedInstances;
     private isDisposed;
+    private isActiveResolution;
+    private isFrozen;
     constructor(parent?: Container | undefined);
     createChild(): Container;
+    freeze(): void;
+    unfrozen(): boolean;
     register<T>(provider: Provider<T>, scope?: Scope): void;
     bind<T>(token: Token<T>, providerDef: ProviderDefinition<T>, scope?: Scope): void;
     override<T>(token: Token<T>, providerDef: ProviderDefinition<T>, scope?: Scope): void;
@@ -22,7 +26,7 @@ export declare class Container {
     scoped<T>(token: Token<T>, providerDef?: ProviderDefinition<T>): void;
     transient<T>(token: Token<T>, providerDef?: ProviderDefinition<T>): void;
     instance<T>(token: Token<T>, value: T): void;
-    factory<T>(token: Token<T>, factory: (container: Container) => T | Promise<T>, scope?: Scope): void;
+    factory<T>(token: Token<T>, factory: (resolver: Resolver) => T | Promise<T>, scope?: Scope): void;
     has<T>(token: Token<T>): boolean;
     hasOwn<T>(token: Token<T>): boolean;
     resolve<T>(token: Token<T>): T;
@@ -31,7 +35,7 @@ export declare class Container {
     getInstantiatedInstances(): unknown[];
     protected hasRegistration(key: unknown): boolean;
     protected getRegistrationRecursively(key: unknown): ProviderRegistration | undefined;
-    protected ensureRegistered(key: unknown, token: Token<unknown>): void;
+    protected ensureRegistered(key: unknown, token: Token<unknown>, path: unknown[]): void;
     private createResolutionProxy;
     private internalResolveSync;
     private internalResolveAsync;

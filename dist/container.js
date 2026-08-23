@@ -6,15 +6,33 @@ export class Container {
     registrations = new Map();
     instantiatedInstances = new Set();
     isDisposed = false;
+    isActiveResolution = false;
+    isFrozen = false;
     constructor(parent) {
         this.parent = parent;
     }
     createChild() {
         return new Container(this);
     }
+    freeze() {
+        this.isFrozen = true;
+    }
+    unfrozen() {
+        return !this.isFrozen;
+    }
     register(provider, scope = 'singleton') {
+        if (this.isActiveResolution) {
+            throw new Error('Cannot register providers during active resolution');
+        }
+        if (this.isFrozen) {
+            throw new Error('Cannot register providers on a frozen container. Container is already initialized.');
+        }
         if (!('provide' in provider) || provider.provide === undefined) {
             throw new InvalidProviderError('Provider must have a "provide" property when using register()');
+        }
+        const key = this.getTokenKey(provider.provide);
+        if (this.hasOwn(provider.provide)) {
+            throw new DuplicateProviderError(key);
         }
         this.bind(provider.provide, provider, scope);
     }
@@ -89,9 +107,9 @@ export class Container {
             return this.internalResolveSync(token, []);
         }
         catch (e) {
-            if (e.name === 'DependencyResolutionError' || e.name === 'CircularDependencyError' || e.name === 'UnknownProviderError' || e.name === 'AsyncProviderResolutionError' || e.name === 'PrimitiveDependencyError')
+            if (e.name === 'DependencyResolutionError')
                 throw e;
-            throw new DependencyResolutionError(token, e);
+            throw new DependencyResolutionError(token, e, []);
         }
     }
     async resolveAsync(token) {
@@ -99,9 +117,9 @@ export class Container {
             return await this.internalResolveAsync(token, []);
         }
         catch (e) {
-            if (e.name === 'DependencyResolutionError' || e.name === 'CircularDependencyError' || e.name === 'UnknownProviderError' || e.name === 'PrimitiveDependencyError')
+            if (e.name === 'DependencyResolutionError')
                 throw e;
-            throw new DependencyResolutionError(token, e);
+            throw new DependencyResolutionError(token, e, []);
         }
     }
     dispose() {
@@ -124,37 +142,28 @@ export class Container {
             return this.parent.getRegistrationRecursively(key);
         return undefined;
     }
-    ensureRegistered(key, token) {
+    ensureRegistered(key, token, path) {
         if (!this.registrations.has(key)) {
             if (typeof token === 'function') {
                 if (this.parent) {
-                    this.parent.ensureRegistered(key, token);
+                    this.parent.ensureRegistered(key, token, path);
                 }
                 else {
                     this.singleton(token);
                 }
             }
             else {
-                throw new UnknownProviderError(key);
+                throw new UnknownProviderError(key, undefined, undefined, path);
             }
         }
     }
     createResolutionProxy(path) {
-        return new Proxy(this, {
-            get: (target, prop) => {
-                if (prop === 'resolve') {
-                    return (t) => target.internalResolveSync(t, path);
-                }
-                if (prop === 'resolveAsync') {
-                    return (t) => target.internalResolveAsync(t, path);
-                }
-                const value = target[prop];
-                if (typeof value === 'function') {
-                    return value.bind(target);
-                }
-                return value;
-            }
-        });
+        const resolve = (token) => this.internalResolveSync(token, path);
+        const resolveAsync = (token) => this.internalResolveAsync(token, path);
+        return {
+            resolve,
+            resolveAsync
+        };
     }
     internalResolveSync(token, path) {
         if (this.isDisposed)
@@ -164,36 +173,43 @@ export class Container {
             throw new CircularDependencyError([...path, key]);
         }
         let reg = this.registrations.get(key);
-        if (!reg) {
-            if (this.hasRegistration(key)) {
-                const parentReg = this.getRegistrationRecursively(key);
-                if (parentReg.scope === 'singleton' || parentReg.scope === 'transient') {
-                    return this.parent.internalResolveSync(token, path);
+        try {
+            if (!reg) {
+                if (this.hasRegistration(key)) {
+                    const parentReg = this.getRegistrationRecursively(key);
+                    if (parentReg.scope === 'singleton' || parentReg.scope === 'transient') {
+                        return this.parent.internalResolveSync(token, path);
+                    }
+                    else if (parentReg.scope === 'scoped') {
+                        reg = { provider: parentReg.provider, scope: 'scoped' };
+                        this.registrations.set(key, reg);
+                    }
                 }
-                else if (parentReg.scope === 'scoped') {
-                    reg = { provider: parentReg.provider, scope: 'scoped' };
-                    this.registrations.set(key, reg);
+                else {
+                    this.ensureRegistered(key, token, path);
+                    return this.internalResolveSync(token, path);
                 }
             }
-            else {
-                this.ensureRegistered(key, token);
-                return this.internalResolveSync(token, path);
+            if ('useExisting' in reg.provider) {
+                return this.internalResolveSync(reg.provider.useExisting, [...path, key]);
             }
+            if ((reg.scope === 'singleton' || reg.scope === 'scoped') && 'instance' in reg) {
+                return reg.instance;
+            }
+            const instance = this.resolveProviderSync(reg.provider, key, [...path, key]);
+            if (reg.scope === 'singleton' || reg.scope === 'scoped') {
+                reg.instance = instance;
+            }
+            if (reg.scope !== 'transient' && instance && typeof instance === 'object') {
+                this.instantiatedInstances.add(instance);
+            }
+            return instance;
         }
-        if ('useExisting' in reg.provider) {
-            return this.internalResolveSync(reg.provider.useExisting, [...path, key]);
+        catch (e) {
+            if (e.name === 'DependencyResolutionError')
+                throw e;
+            throw new DependencyResolutionError(token, e, path);
         }
-        if ((reg.scope === 'singleton' || reg.scope === 'scoped') && 'instance' in reg) {
-            return reg.instance;
-        }
-        const instance = this.resolveProviderSync(reg.provider, key, [...path, key]);
-        if (reg.scope === 'singleton' || reg.scope === 'scoped') {
-            reg.instance = instance;
-        }
-        if (reg.scope !== 'transient' && instance && typeof instance === 'object') {
-            this.instantiatedInstances.add(instance);
-        }
-        return instance;
     }
     async internalResolveAsync(token, path) {
         if (this.isDisposed)
@@ -203,47 +219,54 @@ export class Container {
             throw new CircularDependencyError([...path, key]);
         }
         let reg = this.registrations.get(key);
-        if (!reg) {
-            if (this.hasRegistration(key)) {
-                const parentReg = this.getRegistrationRecursively(key);
-                if (parentReg.scope === 'singleton' || parentReg.scope === 'transient') {
-                    return this.parent.internalResolveAsync(token, path);
+        try {
+            if (!reg) {
+                if (this.hasRegistration(key)) {
+                    const parentReg = this.getRegistrationRecursively(key);
+                    if (parentReg.scope === 'singleton' || parentReg.scope === 'transient') {
+                        return this.parent.internalResolveAsync(token, path);
+                    }
+                    else if (parentReg.scope === 'scoped') {
+                        reg = { provider: parentReg.provider, scope: 'scoped' };
+                        this.registrations.set(key, reg);
+                    }
                 }
-                else if (parentReg.scope === 'scoped') {
-                    reg = { provider: parentReg.provider, scope: 'scoped' };
-                    this.registrations.set(key, reg);
+                else {
+                    this.ensureRegistered(key, token, path);
+                    return this.internalResolveAsync(token, path);
                 }
             }
-            else {
-                this.ensureRegistered(key, token);
-                return this.internalResolveAsync(token, path);
+            if ('useExisting' in reg.provider) {
+                return this.internalResolveAsync(reg.provider.useExisting, [...path, key]);
             }
-        }
-        if ('useExisting' in reg.provider) {
-            return this.internalResolveAsync(reg.provider.useExisting, [...path, key]);
-        }
-        if ((reg.scope === 'singleton' || reg.scope === 'scoped') && 'instance' in reg) {
-            return reg.instance;
-        }
-        if ((reg.scope === 'singleton' || reg.scope === 'scoped') && reg.asyncPromise) {
-            return reg.asyncPromise;
-        }
-        const resolutionPromise = this.resolveProviderAsync(reg.provider, [...path, key]);
-        if (reg.scope === 'singleton' || reg.scope === 'scoped') {
-            reg.asyncPromise = resolutionPromise;
-            try {
-                reg.instance = await resolutionPromise;
-                if (reg.instance && typeof reg.instance === 'object') {
-                    this.instantiatedInstances.add(reg.instance);
-                }
+            if ((reg.scope === 'singleton' || reg.scope === 'scoped') && 'instance' in reg) {
                 return reg.instance;
             }
-            catch (e) {
-                delete reg.asyncPromise;
-                throw e;
+            if ((reg.scope === 'singleton' || reg.scope === 'scoped') && reg.asyncPromise) {
+                return reg.asyncPromise;
             }
+            const resolutionPromise = this.resolveProviderAsync(reg.provider, [...path, key]);
+            if (reg.scope === 'singleton' || reg.scope === 'scoped') {
+                reg.asyncPromise = resolutionPromise;
+                try {
+                    reg.instance = await resolutionPromise;
+                    if (reg.instance && typeof reg.instance === 'object') {
+                        this.instantiatedInstances.add(reg.instance);
+                    }
+                    return reg.instance;
+                }
+                catch (e) {
+                    delete reg.asyncPromise;
+                    throw e;
+                }
+            }
+            return await resolutionPromise;
         }
-        return await resolutionPromise;
+        catch (e) {
+            if (e.name === 'DependencyResolutionError')
+                throw e;
+            throw new DependencyResolutionError(token, e, path);
+        }
     }
     resolveProviderSync(provider, key, path) {
         if ('useValue' in provider) {

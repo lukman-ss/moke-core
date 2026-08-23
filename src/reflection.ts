@@ -1,11 +1,16 @@
 import 'reflect-metadata';
 import { Constructor, Token } from './types.js';
 
+const INJECTABLE_METADATA = Symbol('moke:injectable');
+const INJECT_METADATA = Symbol('moke:inject');
+const MODULE_METADATA = Symbol('moke:module');
+const DESIGN_PARAM_TYPES = 'design:paramtypes';
+
 export const METADATA_KEYS = {
-  INJECTABLE: Symbol.for('moke:injectable'),
-  INJECT: Symbol.for('moke:inject'),
-  MODULE: Symbol.for('moke:module'),
-  DESIGN_PARAM_TYPES: 'design:paramtypes',
+  INJECTABLE: INJECTABLE_METADATA,
+  INJECT: INJECT_METADATA,
+  MODULE: MODULE_METADATA,
+  DESIGN_PARAM_TYPES,
 } as const;
 
 export interface InjectMetadata {

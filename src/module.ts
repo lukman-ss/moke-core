@@ -6,6 +6,7 @@ export interface ModuleMetadata {
   imports?: Constructor<unknown>[];
   providers?: ProviderDefinition[];
   exports?: Token[];
+  controllers?: Constructor<unknown>[];
 }
 
 export function Module(metadata: ModuleMetadata): ClassDecorator {

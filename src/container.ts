@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { Constructor, Token, InjectionToken } from './types.js';
-import { Provider, ProviderDefinition, Scope } from './providers.js';
+import { Provider, ProviderDefinition, Scope, Resolver } from './providers.js';
 import { ReflectionHost } from './reflection.js';
 import { AsyncProviderResolutionError, CircularDependencyError, InvalidProviderError, UnknownProviderError, DependencyResolutionError, DuplicateProviderError, PrimitiveDependencyError } from './errors.js';
 
@@ -15,6 +15,8 @@ export class Container {
   private registrations = new Map<unknown, ProviderRegistration>();
   private instantiatedInstances = new Set<unknown>();
   private isDisposed = false;
+  private isActiveResolution = false;
+  private isFrozen = false;
 
   constructor(private parent?: Container) {}
 
@@ -22,10 +24,30 @@ export class Container {
     return new Container(this);
   }
 
+  freeze(): void {
+    this.isFrozen = true;
+  }
+
+  unfrozen(): boolean {
+    return !this.isFrozen;
+  }
+
   register<T>(provider: Provider<T>, scope: Scope = 'singleton'): void {
+    if (this.isActiveResolution) {
+      throw new Error('Cannot register providers during active resolution');
+    }
+    if (this.isFrozen) {
+      throw new Error('Cannot register providers on a frozen container. Container is already initialized.');
+    }
     if (!('provide' in provider) || provider.provide === undefined) {
       throw new InvalidProviderError('Provider must have a "provide" property when using register()');
     }
+    
+    const key = this.getTokenKey(provider.provide);
+    if (this.hasOwn(provider.provide)) {
+      throw new DuplicateProviderError(key);
+    }
+    
     this.bind(provider.provide, provider, scope);
   }
 
@@ -99,7 +121,7 @@ export class Container {
     this.instantiatedInstances.add(value);
   }
 
-  factory<T>(token: Token<T>, factory: (container: Container) => T | Promise<T>, scope: Scope = 'singleton'): void {
+  factory<T>(token: Token<T>, factory: (resolver: Resolver) => T | Promise<T>, scope: Scope = 'singleton'): void {
     this.bind(token, { useFactory: factory }, scope);
   }
 
@@ -164,22 +186,14 @@ export class Container {
     }
   }
 
-  private createResolutionProxy(path: unknown[]): Container {
-    return new Proxy(this, {
-      get: (target, prop) => {
-        if (prop === 'resolve') {
-          return (t: any) => target.internalResolveSync(t, path);
-        }
-        if (prop === 'resolveAsync') {
-          return (t: any) => target.internalResolveAsync(t, path);
-        }
-        const value = (target as any)[prop];
-        if (typeof value === 'function') {
-          return value.bind(target);
-        }
-        return value;
-      }
-    });
+  private createResolutionProxy(path: unknown[]): Resolver {
+    const resolve = <T>(token: Token<T>): T => this.internalResolveSync(token, path) as T;
+    const resolveAsync = <T>(token: Token<T>): Promise<T> => this.internalResolveAsync(token, path) as Promise<T>;
+    
+    return {
+      resolve,
+      resolveAsync
+    };
   }
 
   private internalResolveSync(token: Token<unknown>, path: unknown[]): unknown {

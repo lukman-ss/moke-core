@@ -73,6 +73,63 @@ describe('Container Scopes & Lifecycle', () => {
       expect(calls).to.equal(2);
     });
 
+    it('should handle scoped async concurrency (100 resolutions -> 1 call per scope)', async () => {
+      const TOKEN = createToken<number>('SCOPED_CONCURRENCY');
+      let calls = 0;
+      
+      root.scoped(TOKEN, {
+        useFactory: async () => {
+          calls++;
+          await new Promise(r => setTimeout(r, 5));
+          // Return a unique object per factory invocation instead of global counter, 
+          // because concurrent executions might finish out of expected sequence
+          return { id: calls }; 
+        }
+      });
+
+      const childA = root.createChild();
+      const childB = root.createChild();
+
+      const promisesA = Array.from({ length: 100 }, () => childA.resolveAsync(TOKEN));
+      const promisesB = Array.from({ length: 100 }, () => childB.resolveAsync(TOKEN));
+
+      const [resultsA, resultsB] = await Promise.all([
+        Promise.all(promisesA),
+        Promise.all(promisesB)
+      ]);
+
+      expect(resultsA.every(v => v === resultsA[0])).to.be.true;
+      expect(resultsB.every(v => v === resultsB[0])).to.be.true;
+      expect(resultsA[0]).to.not.equal(resultsB[0]);
+      expect(calls).to.equal(2);
+    });
+
+    it('should retry failed scoped async factory without permanent caching', async () => {
+      const TOKEN = createToken<string>('SCOPED_RETRY');
+      let calls = 0;
+
+      root.scoped(TOKEN, {
+        useFactory: async () => {
+          calls++;
+          if (calls === 1) throw new Error('First try fails');
+          return 'success';
+        }
+      });
+
+      const child = root.createChild();
+
+      try {
+        await child.resolveAsync(TOKEN);
+        expect.fail();
+      } catch (e: any) {
+        expect(e.cause?.message).to.equal('First try fails');
+      }
+
+      const val = await child.resolveAsync(TOKEN);
+      expect(val).to.equal('success');
+      expect(calls).to.equal(2);
+    });
+
     it('child overrides parent transparently', () => {
       class Target {}
       root.instance(Target, { val: 'root' });
