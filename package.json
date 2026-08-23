@@ -1,0 +1,16 @@
+{
+  "name": "@lukman-ss/moke-core",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "reflect-metadata": "^0.1.13"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2"
+  },
+  "description": "Core module for Moke web framework. Provides IoC Container, Dependency Injection, and Application Bootstrap."
+}
