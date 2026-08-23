@@ -98,7 +98,6 @@ export class Container {
       return await this.internalResolveAsync(token, []) as T;
     } catch (e: any) {
       if (e.name === 'DependencyResolutionError' || e.name === 'CircularDependencyError' || e.name === 'UnknownProviderError') throw e;
-      if (e.message === 'First fail') throw e; // Let explicitly thrown test errors pass through
       throw new DependencyResolutionError(token, e);
     }
   }

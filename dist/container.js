@@ -80,8 +80,6 @@ export class Container {
         catch (e) {
             if (e.name === 'DependencyResolutionError' || e.name === 'CircularDependencyError' || e.name === 'UnknownProviderError')
                 throw e;
-            if (e.message === 'First fail')
-                throw e; // Let explicitly thrown test errors pass through
             throw new DependencyResolutionError(token, e);
         }
     }

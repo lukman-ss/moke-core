@@ -182,7 +182,8 @@ describe('Container', () => {
       await container.resolveAsync(TOKEN);
       expect.fail('Should have thrown');
     } catch (e: any) {
-      expect(e.message).to.equal('First fail');
+      expect(e.cause).to.be.instanceOf(Error);
+      expect(e.cause.message).to.equal('First fail');
     }
 
     const val = await container.resolveAsync(TOKEN);
