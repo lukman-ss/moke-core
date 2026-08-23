@@ -5,6 +5,7 @@
     "test/**/*"
   ],
   "compilerOptions": {
-    "rootDir": "."
+    "rootDir": ".",
+    "noEmit": true
   }
 }

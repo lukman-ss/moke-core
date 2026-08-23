@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { Container } from '../src/container.js';
 import { createToken } from '../src/types.js';
 import { Inject, Injectable } from '../src/decorators.js';
+import { AsyncProviderResolutionError } from '../src/errors.js';
 
 describe('Container', () => {
   let container: Container;
@@ -9,6 +10,8 @@ describe('Container', () => {
   beforeEach(() => {
     container = new Container();
   });
+
+  // --- Sync Resolution Tests ---
 
   it('should resolve class dependency (singleton by default)', () => {
     class ServiceA {}
@@ -118,5 +121,95 @@ describe('Container', () => {
     }
 
     expect(() => container.resolve(Target)).to.throw(/Cannot resolve constructor dependency at index 0/);
+  });
+
+  // --- Async Resolution Tests ---
+
+  it('should resolve sync factory via resolveAsync', async () => {
+    const TOKEN = createToken<string>('SYNC_FACTORY');
+    container.factory(TOKEN, () => 'sync-val');
+    
+    const val = await container.resolveAsync(TOKEN);
+    expect(val).to.equal('sync-val');
+  });
+
+  it('should resolve async factory via resolveAsync', async () => {
+    const TOKEN = createToken<string>('ASYNC_FACTORY');
+    container.factory(TOKEN, async () => 'async-val');
+    
+    const val = await container.resolveAsync(TOKEN);
+    expect(val).to.equal('async-val');
+  });
+
+  it('should throw AsyncProviderResolutionError when async factory resolved via sync resolve', () => {
+    const TOKEN = createToken<string>('ASYNC_FACTORY_FAIL');
+    container.factory(TOKEN, async () => 'fail-val');
+    
+    expect(() => container.resolve(TOKEN)).to.throw(AsyncProviderResolutionError);
+  });
+
+  it('should resolve async singleton only once (cache in-flight promise)', async () => {
+    const TOKEN = createToken<number>('ASYNC_SINGLETON');
+    let calls = 0;
+    container.factory(TOKEN, async () => {
+      calls++;
+      return new Promise(resolve => setTimeout(() => resolve(calls), 10));
+    });
+
+    const results = await Promise.all([
+      container.resolveAsync(TOKEN),
+      container.resolveAsync(TOKEN),
+      container.resolveAsync(TOKEN)
+    ]);
+
+    expect(results).to.deep.equal([1, 1, 1]);
+    expect(calls).to.equal(1);
+  });
+
+  it('should retry failed async factory on next resolution', async () => {
+    const TOKEN = createToken<string>('ASYNC_RETRY');
+    let fail = true;
+    container.factory(TOKEN, async () => {
+      if (fail) {
+        fail = false;
+        throw new Error('First fail');
+      }
+      return 'success';
+    });
+
+    try {
+      await container.resolveAsync(TOKEN);
+      expect.fail('Should have thrown');
+    } catch (e: any) {
+      expect(e.message).to.equal('First fail');
+    }
+
+    const val = await container.resolveAsync(TOKEN);
+    expect(val).to.equal('success');
+  });
+
+  it('should support transient async factory', async () => {
+    const TOKEN = createToken<number>('ASYNC_TRANSIENT');
+    let counter = 0;
+    container.factory(TOKEN, async () => ++counter, 'transient');
+
+    const v1 = await container.resolveAsync(TOKEN);
+    const v2 = await container.resolveAsync(TOKEN);
+
+    expect(v1).to.equal(1);
+    expect(v2).to.equal(2);
+  });
+
+  it('should support nested async dependencies', async () => {
+    const ASYNC_DEP = createToken<string>('ASYNC_DEP');
+    container.factory(ASYNC_DEP, async () => 'async-dep-value');
+
+    @Injectable()
+    class Target {
+      constructor(@Inject(ASYNC_DEP) public dep: string) {}
+    }
+
+    const instance = await container.resolveAsync(Target);
+    expect(instance.dep).to.equal('async-dep-value');
   });
 });

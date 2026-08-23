@@ -9,7 +9,15 @@ export class MokeFactory {
     // Default providers
     container.instance(MokeLogger, new MokeLogger());
     
-    const app = container.resolve(module);
-    return app;
+    return container.resolve(module);
+  }
+
+  static async createAsync<T>(module: Constructor<T>): Promise<T> {
+    const container = new Container();
+    
+    // Default providers
+    container.instance(MokeLogger, new MokeLogger());
+    
+    return container.resolveAsync(module);
   }
 }

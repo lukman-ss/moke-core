@@ -2,11 +2,13 @@ import 'reflect-metadata';
 import { Constructor, Token, InjectionToken } from './types.js';
 import { Provider, ProviderDefinition, Scope } from './providers.js';
 import { INJECT_METADATA_KEY } from './decorators.js';
+import { AsyncProviderResolutionError } from './errors.js';
 
 interface ProviderRegistration {
   provider: Provider;
   scope: Scope;
   instance?: any;
+  asyncPromise?: Promise<any>;
 }
 
 export class Container {
@@ -51,22 +53,14 @@ export class Container {
 
   resolve<T>(token: Token<T>): T {
     const key = this.getTokenKey(token);
-
-    if (!this.registrations.has(key)) {
-      if (typeof token === 'function') {
-        this.singleton(token);
-      } else {
-        throw new Error(`Cannot resolve dependency for token: ${String(key)}`);
-      }
-    }
-
+    this.ensureRegistered(key, token);
     const reg = this.registrations.get(key)!;
 
     if (reg.scope === 'singleton' && 'instance' in reg) {
       return reg.instance as T;
     }
 
-    const instance = this.resolveProvider(reg.provider);
+    const instance = this.resolveProviderSync(reg.provider, key);
 
     if (reg.scope === 'singleton') {
       reg.instance = instance;
@@ -75,7 +69,68 @@ export class Container {
     return instance;
   }
 
-  private resolveProvider(provider: Provider): any {
+  async resolveAsync<T>(token: Token<T>): Promise<T> {
+    const key = this.getTokenKey(token);
+    this.ensureRegistered(key, token);
+    const reg = this.registrations.get(key)!;
+
+    if (reg.scope === 'singleton' && 'instance' in reg) {
+      return reg.instance as T;
+    }
+
+    if (reg.scope === 'singleton' && reg.asyncPromise) {
+      return reg.asyncPromise;
+    }
+
+    const resolutionPromise = this.resolveProviderAsync(reg.provider);
+
+    if (reg.scope === 'singleton') {
+      reg.asyncPromise = resolutionPromise;
+      try {
+        reg.instance = await resolutionPromise;
+        return reg.instance as T;
+      } catch (e) {
+        delete reg.asyncPromise;
+        throw e;
+      }
+    }
+
+    return resolutionPromise;
+  }
+
+  private ensureRegistered<T>(key: any, token: Token<T>) {
+    if (!this.registrations.has(key)) {
+      if (typeof token === 'function') {
+        this.singleton(token);
+      } else {
+        throw new Error(`Cannot resolve dependency for token: ${String(key)}`);
+      }
+    }
+  }
+
+  private resolveProviderSync(provider: Provider, key: any): any {
+    if ('useValue' in provider) {
+      return provider.useValue;
+    }
+
+    if ('useFactory' in provider) {
+      const result = provider.useFactory(this);
+      if (result instanceof Promise) {
+        throw new AsyncProviderResolutionError(key);
+      }
+      return result;
+    }
+
+    if ('useExisting' in provider) {
+      return this.resolve(provider.useExisting);
+    }
+
+    if ('useClass' in provider) {
+      return this.instantiateClassSync(provider.useClass);
+    }
+  }
+
+  private async resolveProviderAsync(provider: Provider): Promise<any> {
     if ('useValue' in provider) {
       return provider.useValue;
     }
@@ -85,30 +140,38 @@ export class Container {
     }
 
     if ('useExisting' in provider) {
-      return this.resolve(provider.useExisting);
+      return this.resolveAsync(provider.useExisting);
     }
 
     if ('useClass' in provider) {
-      return this.instantiateClass(provider.useClass);
+      return this.instantiateClassAsync(provider.useClass);
     }
   }
 
-  private instantiateClass<T>(target: Constructor<T>): T {
+  private instantiateClassSync<T>(target: Constructor<T>): T {
+    const injections = this.getConstructorInjections(target).map(t => this.resolve(t));
+    return new target(...injections);
+  }
+
+  private async instantiateClassAsync<T>(target: Constructor<T>): Promise<T> {
+    const injections = await Promise.all(
+      this.getConstructorInjections(target).map(t => this.resolveAsync(t))
+    );
+    return new target(...injections);
+  }
+
+  private getConstructorInjections<T>(target: Constructor<T>): Token[] {
     const paramTypes = Reflect.getMetadata('design:paramtypes', target) || [];
     const explicitInjections: { index: number, token: Token }[] = Reflect.getOwnMetadata(INJECT_METADATA_KEY, target) || [];
 
-    const injections = paramTypes.map((type: any, index: number) => {
+    return paramTypes.map((type: any, index: number) => {
       const explicit = explicitInjections.find(e => e.index === index);
-      if (explicit) {
-        return this.resolve(explicit.token);
-      }
+      if (explicit) return explicit.token;
       if (!type || type === Object) {
         throw new Error(`Cannot resolve constructor dependency at index ${index} for ${target.name}. Type is unknown or an interface. Use @Inject().`);
       }
-      return this.resolve(type);
+      return type;
     });
-
-    return new target(...injections);
   }
 
   private getTokenKey<T>(token: Token<T>): any {

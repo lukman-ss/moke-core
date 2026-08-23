@@ -1,6 +1,6 @@
 {
   "name": "@lukman-ss/moke-core",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Core module for Moke web framework. Provides IoC Container, Dependency Injection, and Application Bootstrap.",
   "type": "module",
   "main": "./dist/index.js",
