@@ -1,7 +1,7 @@
 import { expect } from 'chai';
-import { MokeFactory, ApplicationState } from '@lukman-ss/moke-core';
-import { OnModuleInit, OnApplicationBootstrap, OnModuleDestroy, OnApplicationShutdown } from '@lukman-ss/moke-core';
-import { Injectable } from '@lukman-ss/moke-core';
+import { MokeFactory, ApplicationState } from '../../src/index.js';
+import { OnModuleInit, OnApplicationBootstrap, OnModuleDestroy, OnApplicationShutdown } from '../../src/index.js';
+import { Injectable } from '../../src/index.js';
 
 describe('Application - Create & Initialize', () => {
   it('should create application without initialization', async () => {

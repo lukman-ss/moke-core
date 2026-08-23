@@ -1,6 +1,6 @@
 import { expect } from 'chai';
-import { Container } from '@lukman-ss/moke-core';
-import { Inject, Injectable } from '@lukman-ss/moke-core';
+import { Container } from '../../src/index.js';
+import { Inject, Injectable } from '../../src/index.js';
 
 describe('Decorator Inheritance', () => {
   let container: Container;

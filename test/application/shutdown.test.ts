@@ -1,7 +1,7 @@
 import { expect } from 'chai';
-import { MokeFactory } from '@lukman-ss/moke-core';
-import { OnModuleDestroy, OnApplicationShutdown, Module } from '@lukman-ss/moke-core';
-import { Injectable } from '@lukman-ss/moke-core';
+import { MokeFactory } from '../../src/index.js';
+import { OnModuleDestroy, OnApplicationShutdown, Module } from '../../src/index.js';
+import { Injectable } from '../../src/index.js';
 
 describe('Application - Shutdown', () => {
   it('should close application successfully', async () => {

@@ -1,7 +1,7 @@
 import { expect } from 'chai';
-import { MokeFactory } from '@lukman-ss/moke-core';
-import { OnModuleInit, OnApplicationBootstrap, OnModuleDestroy } from '@lukman-ss/moke-core';
-import { Injectable } from '@lukman-ss/moke-core';
+import { MokeFactory } from '../../src/index.js';
+import { OnModuleInit, OnApplicationBootstrap, OnModuleDestroy } from '../../src/index.js';
+import { Injectable } from '../../src/index.js';
 
 describe('Application - Lifecycle Hooks', () => {
   it('should execute lifecycle hooks in deterministic order', async () => {

@@ -1,7 +1,7 @@
 import { expect } from 'chai';
-import { MokeFactory } from '@lukman-ss/moke-core';
-import { Module } from '@lukman-ss/moke-core';
-import { Injectable } from '@lukman-ss/moke-core';
+import { MokeFactory } from '../../src/index.js';
+import { Module } from '../../src/index.js';
+import { Injectable } from '../../src/index.js';
 
 describe('Module - Empty Module', () => {
   it('should create module with no metadata', async () => {
