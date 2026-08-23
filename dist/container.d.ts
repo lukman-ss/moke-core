@@ -1,6 +1,12 @@
 import 'reflect-metadata';
 import { Token } from './types.js';
 import { Provider, ProviderDefinition, Scope } from './providers.js';
+interface ProviderRegistration {
+    provider: Provider;
+    scope: Scope;
+    instance?: unknown;
+    asyncPromise?: Promise<unknown>;
+}
 export declare class Container {
     private parent?;
     private registrations;
@@ -20,9 +26,12 @@ export declare class Container {
     resolveAsync<T>(token: Token<T>): Promise<T>;
     dispose(): void;
     getInstantiatedInstances(): unknown[];
+    protected hasRegistration(key: unknown): boolean;
+    protected getRegistrationRecursively(key: unknown): ProviderRegistration | undefined;
+    protected ensureRegistered(key: unknown, token: Token<unknown>): void;
+    private createResolutionProxy;
     private internalResolveSync;
     private internalResolveAsync;
-    private ensureRegistered;
     private resolveProviderSync;
     private resolveProviderAsync;
     private instantiateClassSync;
@@ -30,4 +39,5 @@ export declare class Container {
     private getConstructorInjections;
     private getTokenKey;
 }
+export {};
 //# sourceMappingURL=container.d.ts.map

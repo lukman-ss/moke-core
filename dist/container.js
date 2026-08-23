@@ -59,9 +59,7 @@ export class Container {
         this.bind(token, { useFactory: factory }, scope);
     }
     has(token) {
-        if (this.registrations.has(this.getTokenKey(token)))
-            return true;
-        return this.parent ? this.parent.has(token) : false;
+        return this.hasRegistration(this.getTokenKey(token));
     }
     resolve(token) {
         try {
@@ -91,6 +89,50 @@ export class Container {
     getInstantiatedInstances() {
         return Array.from(this.instantiatedInstances);
     }
+    hasRegistration(key) {
+        if (this.registrations.has(key))
+            return true;
+        return this.parent ? this.parent.hasRegistration(key) : false;
+    }
+    getRegistrationRecursively(key) {
+        if (this.registrations.has(key))
+            return this.registrations.get(key);
+        if (this.parent)
+            return this.parent.getRegistrationRecursively(key);
+        return undefined;
+    }
+    ensureRegistered(key, token) {
+        if (!this.registrations.has(key)) {
+            if (typeof token === 'function') {
+                if (this.parent) {
+                    this.parent.ensureRegistered(key, token);
+                }
+                else {
+                    this.singleton(token);
+                }
+            }
+            else {
+                throw new UnknownProviderError(key);
+            }
+        }
+    }
+    createResolutionProxy(path) {
+        return new Proxy(this, {
+            get: (target, prop) => {
+                if (prop === 'resolve') {
+                    return (t) => target.internalResolveSync(t, path);
+                }
+                if (prop === 'resolveAsync') {
+                    return (t) => target.internalResolveAsync(t, path);
+                }
+                const value = target[prop];
+                if (typeof value === 'function') {
+                    return value.bind(target);
+                }
+                return value;
+            }
+        });
+    }
     internalResolveSync(token, path) {
         if (this.isDisposed)
             throw new Error('Cannot resolve from a disposed container');
@@ -98,18 +140,25 @@ export class Container {
         if (path.includes(key)) {
             throw new CircularDependencyError([...path, key]);
         }
-        if (!this.registrations.has(key)) {
-            if (this.parent && this.parent.has(token)) {
-                return this.parent.internalResolveSync(token, path);
+        let reg = this.registrations.get(key);
+        if (!reg) {
+            if (this.hasRegistration(key)) {
+                const parentReg = this.getRegistrationRecursively(key);
+                if (parentReg.scope === 'singleton' || parentReg.scope === 'transient') {
+                    return this.parent.internalResolveSync(token, path);
+                }
+                else if (parentReg.scope === 'scoped') {
+                    reg = { provider: parentReg.provider, scope: 'scoped' };
+                    this.registrations.set(key, reg);
+                }
             }
-            this.ensureRegistered(key, token);
+            else {
+                this.ensureRegistered(key, token);
+                return this.internalResolveSync(token, path);
+            }
         }
-        const reg = this.registrations.get(key);
         if ('useExisting' in reg.provider) {
             return this.internalResolveSync(reg.provider.useExisting, [...path, key]);
-        }
-        if (reg.scope === 'singleton' && this.parent && !this.registrations.has(key)) {
-            return this.parent.internalResolveSync(token, path);
         }
         if ((reg.scope === 'singleton' || reg.scope === 'scoped') && 'instance' in reg) {
             return reg.instance;
@@ -127,27 +176,34 @@ export class Container {
         if (this.isDisposed)
             throw new Error('Cannot resolve from a disposed container');
         const key = this.getTokenKey(token);
-        if (!this.registrations.has(key)) {
-            if (this.parent && this.parent.has(token)) {
-                return this.parent.internalResolveAsync(token, path);
-            }
-            this.ensureRegistered(key, token);
-        }
-        const reg = this.registrations.get(key);
-        if (reg.scope === 'singleton' && reg.asyncPromise) {
-            return reg.asyncPromise;
-        }
         if (path.includes(key)) {
             throw new CircularDependencyError([...path, key]);
+        }
+        let reg = this.registrations.get(key);
+        if (!reg) {
+            if (this.hasRegistration(key)) {
+                const parentReg = this.getRegistrationRecursively(key);
+                if (parentReg.scope === 'singleton' || parentReg.scope === 'transient') {
+                    return this.parent.internalResolveAsync(token, path);
+                }
+                else if (parentReg.scope === 'scoped') {
+                    reg = { provider: parentReg.provider, scope: 'scoped' };
+                    this.registrations.set(key, reg);
+                }
+            }
+            else {
+                this.ensureRegistered(key, token);
+                return this.internalResolveAsync(token, path);
+            }
         }
         if ('useExisting' in reg.provider) {
             return this.internalResolveAsync(reg.provider.useExisting, [...path, key]);
         }
-        if (reg.scope === 'singleton' && this.parent && !this.registrations.has(key)) {
-            return this.parent.internalResolveAsync(token, path);
-        }
         if ((reg.scope === 'singleton' || reg.scope === 'scoped') && 'instance' in reg) {
             return reg.instance;
+        }
+        if ((reg.scope === 'singleton' || reg.scope === 'scoped') && reg.asyncPromise) {
+            return reg.asyncPromise;
         }
         const resolutionPromise = this.resolveProviderAsync(reg.provider, [...path, key]);
         if (reg.scope === 'singleton' || reg.scope === 'scoped') {
@@ -166,33 +222,17 @@ export class Container {
         }
         return await resolutionPromise;
     }
-    ensureRegistered(key, token) {
-        if (!this.registrations.has(key)) {
-            if (typeof token === 'function') {
-                this.singleton(token);
-            }
-            else {
-                throw new UnknownProviderError(key);
-            }
-        }
-    }
     resolveProviderSync(provider, key, path) {
         if ('useValue' in provider) {
             return provider.useValue;
         }
         if ('useFactory' in provider) {
-            const originalResolve = this.resolve;
-            try {
-                this.resolve = ((t) => this.internalResolveSync(t, path));
-                const result = provider.useFactory(this);
-                if (result instanceof Promise) {
-                    throw new AsyncProviderResolutionError(key);
-                }
-                return result;
+            const proxy = this.createResolutionProxy(path);
+            const result = provider.useFactory(proxy);
+            if (result instanceof Promise) {
+                throw new AsyncProviderResolutionError(key);
             }
-            finally {
-                this.resolve = originalResolve;
-            }
+            return result;
         }
         if ('useClass' in provider) {
             return this.instantiateClassSync(provider.useClass, path);
@@ -203,17 +243,8 @@ export class Container {
             return provider.useValue;
         }
         if ('useFactory' in provider) {
-            const originalResolveAsync = this.resolveAsync;
-            const originalResolve = this.resolve;
-            try {
-                this.resolveAsync = ((t) => this.internalResolveAsync(t, path));
-                this.resolve = ((t) => this.internalResolveSync(t, path));
-                return await provider.useFactory(this);
-            }
-            finally {
-                this.resolveAsync = originalResolveAsync;
-                this.resolve = originalResolve;
-            }
+            const proxy = this.createResolutionProxy(path);
+            return await provider.useFactory(proxy);
         }
         if ('useClass' in provider) {
             return this.instantiateClassAsync(provider.useClass, path);
